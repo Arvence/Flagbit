@@ -19,3 +19,9 @@ The solution targets .NET 10.
 ```bash
 dotnet build Flagbit.sln
 ```
+
+## Test
+
+```bash
+dotnet test Flagbit.sln
+```
