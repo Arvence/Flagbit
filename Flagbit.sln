@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flagbit.Api.Tests", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flagbit.Sdk.Tests", "tests\Flagbit.Sdk.Tests\Flagbit.Sdk.Tests.csproj", "{F39C28D8-C419-411D-BF9F-8BE1D0B7D0B6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flagbit.Core.Tests", "tests\Flagbit.Core.Tests\Flagbit.Core.Tests.csproj", "{73450D8F-E149-46D2-8315-4FC6DF94BD0E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -117,6 +119,18 @@ Global
 		{F39C28D8-C419-411D-BF9F-8BE1D0B7D0B6}.Release|x64.Build.0 = Release|Any CPU
 		{F39C28D8-C419-411D-BF9F-8BE1D0B7D0B6}.Release|x86.ActiveCfg = Release|Any CPU
 		{F39C28D8-C419-411D-BF9F-8BE1D0B7D0B6}.Release|x86.Build.0 = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|x64.Build.0 = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Debug|x86.Build.0 = Debug|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|x64.ActiveCfg = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|x64.Build.0 = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|x86.ActiveCfg = Release|Any CPU
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -129,5 +143,6 @@ Global
 		{BD8A44D9-8FAE-4C41-854D-1E2DAD5F625B} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{4FD1D6FB-A084-41A0-B723-B651F6B00803} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{F39C28D8-C419-411D-BF9F-8BE1D0B7D0B6} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{73450D8F-E149-46D2-8315-4FC6DF94BD0E} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
