@@ -50,5 +50,25 @@ public sealed class FeatureFlagEvaluatorTests
         {
             return ValueTask.FromResult(flag);
         }
+
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ValueTask AddAsync(
+            FeatureFlag flag,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ValueTask UpdateAsync(
+            FeatureFlag flag,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
