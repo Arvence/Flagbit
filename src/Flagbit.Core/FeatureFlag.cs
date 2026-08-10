@@ -15,5 +15,15 @@ public sealed class FeatureFlag
 
     public string Key { get; }
 
-    public bool IsEnabled { get; }
+    public bool IsEnabled { get; private set; }
+
+    public void Enable()
+    {
+        IsEnabled = true;
+    }
+
+    public void Disable()
+    {
+        IsEnabled = false;
+    }
 }
