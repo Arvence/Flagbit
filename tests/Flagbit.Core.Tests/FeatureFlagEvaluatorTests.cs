@@ -1,4 +1,6 @@
-using Flagbit.Core;
+using Flagbit.Core.Abstractions;
+using Flagbit.Core.Models;
+using Flagbit.Core.Services;
 
 namespace Flagbit.Core.Tests;
 
@@ -44,22 +46,27 @@ public sealed class FeatureFlagEvaluatorTests
 
     private sealed class StubFeatureFlagStore(FeatureFlag? flag) : IFeatureFlagStore
     {
-        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key)
         {
             return ValueTask.FromResult(flag);
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync()
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
+        public ValueTask AddAsync(FeatureFlag flag)
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask UpdateAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
+        public ValueTask UpdateAsync(FeatureFlag flag)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ValueTask<bool> DeleteAsync(string key)
         {
             throw new NotSupportedException();
         }

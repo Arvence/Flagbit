@@ -1,4 +1,7 @@
-using Flagbit.Core;
+using Flagbit.Core.Abstractions;
+using Flagbit.Core.Exceptions;
+using Flagbit.Core.Models;
+using Flagbit.Core.Services;
 
 namespace Flagbit.Core.Tests;
 
@@ -36,7 +39,7 @@ public sealed class FeatureFlagManagerTests
             new FeatureFlag("new-checkout", false));
         var manager = new FeatureFlagManager(store);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<FeatureFlagAlreadyExistsException>(
             async () => await manager.CreateAsync("new-checkout"));
     }
 
@@ -93,28 +96,24 @@ public sealed class FeatureFlagManagerTests
         Assert.Same(flag, store.LastUpdatedFlag);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task IsEnabledAsyncReturnsStoredState(bool storedState)
+    [Fact]
+    public async Task DeleteAsyncRemovesFlag()
     {
-        var manager = new FeatureFlagManager(
-            new InMemoryFeatureFlagStore(
-                new FeatureFlag("new-checkout", storedState)));
+        var flag = new FeatureFlag("new-checkout", true);
+        var store = new InMemoryFeatureFlagStore(flag);
+        var manager = new FeatureFlagManager(store);
 
-        var isEnabled = await manager.IsEnabledAsync("new-checkout");
+        await manager.DeleteAsync("new-checkout");
 
-        Assert.Equal(storedState, isEnabled);
+        Assert.Null(await store.GetByKeyAsync("new-checkout"));
     }
 
     [Fact]
-    public async Task IsEnabledAsyncReturnsFalseForUnknownFlag()
+    public async Task DeleteAsyncThrowsWhenFlagDoesNotExist()
     {
         var manager = new FeatureFlagManager(new InMemoryFeatureFlagStore());
 
-        var isEnabled = await manager.IsEnabledAsync("unknown-feature");
-
-        Assert.False(isEnabled);
+        await Assert.ThrowsAsync<FeatureFlagNotFoundException>(async () => await manager.DeleteAsync("unknown-feature"));
     }
 
     [Theory]
@@ -128,7 +127,7 @@ public sealed class FeatureFlagManagerTests
             ? await manager.EnableAsync("unknown-feature")
             : await manager.DisableAsync("unknown-feature");
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(ChangeState);
+        await Assert.ThrowsAsync<FeatureFlagNotFoundException>(ChangeState);
     }
 
     [Theory]
@@ -162,28 +161,33 @@ public sealed class FeatureFlagManagerTests
 
         public FeatureFlag? LastUpdatedFlag { get; private set; }
 
-        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key)
         {
             return ValueTask.FromResult(
                 _flags.SingleOrDefault(flag => flag.Key == key));
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync()
         {
             return ValueTask.FromResult<IReadOnlyCollection<FeatureFlag>>(
                 _flags.AsReadOnly());
         }
 
-        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
+        public ValueTask AddAsync(FeatureFlag flag)
         {
             _flags.Add(flag);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask UpdateAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
+        public ValueTask UpdateAsync(FeatureFlag flag)
         {
             LastUpdatedFlag = flag;
             return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<bool> DeleteAsync(string key)
+        {
+            return ValueTask.FromResult(_flags.RemoveAll(flag => flag.Key == key) > 0);
         }
     }
 }

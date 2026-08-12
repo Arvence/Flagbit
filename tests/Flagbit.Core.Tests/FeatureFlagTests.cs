@@ -1,4 +1,4 @@
-using Flagbit.Core;
+using Flagbit.Core.Models;
 
 namespace Flagbit.Core.Tests;
 

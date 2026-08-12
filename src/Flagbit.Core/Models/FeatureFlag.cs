@@ -1,4 +1,4 @@
-namespace Flagbit.Core;
+namespace Flagbit.Core.Models;
 
 public sealed class FeatureFlag
 {
