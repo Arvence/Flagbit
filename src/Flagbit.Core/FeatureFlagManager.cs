@@ -1,8 +1,5 @@
 namespace Flagbit.Core;
 
-/// <summary>
-/// Coordinates creation, retrieval, state changes, and evaluation of feature flags.
-/// </summary>
 public sealed class FeatureFlagManager
 {
     private readonly IFeatureFlagStore _store;
@@ -16,23 +13,12 @@ public sealed class FeatureFlagManager
         _evaluator = new FeatureFlagEvaluator(store);
     }
 
-    /// <summary>
-    /// Creates a disabled feature flag.
-    /// </summary>
-    public ValueTask<FeatureFlag> CreateAsync(
-        string key,
-        CancellationToken cancellationToken = default)
+    public ValueTask<FeatureFlag> CreateAsync(string key, CancellationToken cancellationToken = default)
     {
         return CreateAsync(key, isEnabled: false, cancellationToken);
     }
 
-    /// <summary>
-    /// Creates a feature flag with the requested initial state.
-    /// </summary>
-    public async ValueTask<FeatureFlag> CreateAsync(
-        string key,
-        bool isEnabled,
-        CancellationToken cancellationToken = default)
+    public async ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
@@ -48,49 +34,27 @@ public sealed class FeatureFlagManager
         return flag;
     }
 
-    /// <summary>
-    /// Lists all feature flags.
-    /// </summary>
-    public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(
-        CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         return _store.GetAllAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Enables an existing feature flag.
-    /// </summary>
-    public ValueTask<FeatureFlag> EnableAsync(
-        string key,
-        CancellationToken cancellationToken = default)
+    public ValueTask<FeatureFlag> EnableAsync(string key, CancellationToken cancellationToken = default)
     {
         return SetEnabledAsync(key, isEnabled: true, cancellationToken);
     }
 
-    /// <summary>
-    /// Disables an existing feature flag.
-    /// </summary>
-    public ValueTask<FeatureFlag> DisableAsync(
-        string key,
-        CancellationToken cancellationToken = default)
+    public ValueTask<FeatureFlag> DisableAsync(string key, CancellationToken cancellationToken = default)
     {
         return SetEnabledAsync(key, isEnabled: false, cancellationToken);
     }
 
-    /// <summary>
-    /// Returns whether a feature flag is enabled. Unknown flags evaluate to disabled.
-    /// </summary>
-    public ValueTask<bool> IsEnabledAsync(
-        string key,
-        CancellationToken cancellationToken = default)
+    public ValueTask<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default)
     {
         return _evaluator.IsEnabledAsync(key, cancellationToken);
     }
 
-    private async ValueTask<FeatureFlag> SetEnabledAsync(
-        string key,
-        bool isEnabled,
-        CancellationToken cancellationToken)
+    private async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 

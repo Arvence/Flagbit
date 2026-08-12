@@ -162,32 +162,25 @@ public sealed class FeatureFlagManagerTests
 
         public FeatureFlag? LastUpdatedFlag { get; private set; }
 
-        public ValueTask<FeatureFlag?> GetByKeyAsync(
-            string key,
-            CancellationToken cancellationToken = default)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult(
                 _flags.SingleOrDefault(flag => flag.Key == key));
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(
-            CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult<IReadOnlyCollection<FeatureFlag>>(
                 _flags.AsReadOnly());
         }
 
-        public ValueTask AddAsync(
-            FeatureFlag flag,
-            CancellationToken cancellationToken = default)
+        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             _flags.Add(flag);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask UpdateAsync(
-            FeatureFlag flag,
-            CancellationToken cancellationToken = default)
+        public ValueTask UpdateAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             LastUpdatedFlag = flag;
             return ValueTask.CompletedTask;

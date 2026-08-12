@@ -1,8 +1,5 @@
 namespace Flagbit.Core;
 
-/// <summary>
-/// Evaluates feature flags using a safe, disabled-by-default policy.
-/// </summary>
 public sealed class FeatureFlagEvaluator
 {
     private readonly IFeatureFlagStore _store;
@@ -14,9 +11,7 @@ public sealed class FeatureFlagEvaluator
         _store = store;
     }
 
-    public async ValueTask<bool> IsEnabledAsync(
-        string key,
-        CancellationToken cancellationToken = default)
+    public async ValueTask<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
