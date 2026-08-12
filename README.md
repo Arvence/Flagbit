@@ -7,6 +7,7 @@ Flagbit is a lightweight feature flag management platform built with C# and .NET
 - `src/Flagbit.Api` - ASP.NET Core API
 - `src/Flagbit.Core` - domain and business logic
 - `src/Flagbit.Infrastructure` - infrastructure and persistence
+- `src/Flagbit.Json` - API-less local JSON provider
 - `src/Flagbit.Sdk` - reusable .NET client SDK
 - `samples/Flagbit.SampleApi` - example SDK consumer
 - `tests/Flagbit.Api.Tests` - API tests
