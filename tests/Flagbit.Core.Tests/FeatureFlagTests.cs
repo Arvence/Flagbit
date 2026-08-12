@@ -22,6 +22,14 @@ public sealed class FeatureFlagTests
         Assert.ThrowsAny<ArgumentException>(() => new FeatureFlag(key!, true));
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void ConstructorRejectsInvalidRolloutPercentage(int percentage)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new FeatureFlag("new-checkout", true, rolloutPercentage: percentage));
+    }
+
     [Fact]
     public void EnableSetsFlagToEnabled()
     {

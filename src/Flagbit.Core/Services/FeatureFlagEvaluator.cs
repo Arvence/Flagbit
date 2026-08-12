@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
 using Flagbit.Core.Abstractions;
 using Flagbit.Core.Models;
 
@@ -16,43 +19,74 @@ public sealed class FeatureFlagEvaluator
 
     public async ValueTask<bool> IsEnabledAsync(string key)
     {
+        return await IsEnabledAsync(key, FeatureFlagContext.Empty);
+    }
+
+    public async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(context);
 
         var flag = await _store.GetByKeyAsync(key);
 
-        return flag?.IsEnabled ?? false;
+        if (flag?.IsEnabled != true)
+        {
+            return false;
+        }
+
+        return MatchesUser(flag, context) && MatchesPercentage(flag, context);
     }
 
-    /// <summary>
-    /// Fill these functions with your own logic to evaluate feature flags based on user, percentage, environment, rules, date/time, or dependencies.
-    /// </summary>
+    private static bool MatchesUser(FeatureFlag flag, FeatureFlagContext context)
+    {
+        if (flag.TargetedUserIds.Count == 0)
+        {
+            return true;
+        }
 
-    public ValueTask<bool> IsEnabledForUserAsync(string key, string userId)
+        return !string.IsNullOrWhiteSpace(context.UserId) && flag.TargetedUserIds.Contains(context.UserId, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesPercentage(FeatureFlag flag, FeatureFlagContext context)
+    {
+        if (flag.RolloutPercentage is null)
+        {
+            return true;
+        }
+
+        if (flag.RolloutPercentage == 0 || string.IsNullOrWhiteSpace(context.UserId))
+        {
+            return false;
+        }
+
+        if (flag.RolloutPercentage == 100)
+        {
+            return true;
+        }
+
+        var input = Encoding.UTF8.GetBytes($"{flag.Key}:{context.UserId}");
+        var hash = SHA256.HashData(input);
+        var bucket = BinaryPrimitives.ReadUInt32BigEndian(hash) % 100;
+
+        return bucket < flag.RolloutPercentage;
+    }
+
+    private static bool MatchesEnvironment(FeatureFlag flag, FeatureFlagContext context)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<bool> IsEnabledForPercentageAsync(string key, string userId, int percentage)
+    private static bool MatchesRule(FeatureFlag flag, FeatureFlagContext context)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<bool> IsEnabledForEnvironmentAsync(string key, string environment)
+    private static bool MatchesSchedule(FeatureFlag flag, FeatureFlagContext context)
     {
         throw new NotImplementedException();
     }
 
-    public ValueTask<bool> IsEnabledForRuleAsync(string key, Func<FeatureFlag, bool> rule)
-    {
-        throw new NotImplementedException();
-    }
-
-    public ValueTask<bool> IsEnabledAtAsync(string key, DateTimeOffset dateTime)
-    {
-        throw new NotImplementedException();
-    }
-
-    public ValueTask<bool> IsEnabledWithDependencyAsync(string key, string dependencyKey)
+    private ValueTask<bool> MatchesDependenciesAsync(FeatureFlag flag)
     {
         throw new NotImplementedException();
     }
