@@ -20,21 +20,21 @@ public sealed class FeatureFlagApiTests
         Assert.Equal("/api/flags/new-checkout", createResponse.Headers.Location?.OriginalString);
 
         var createdFlag = await createResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
-        Assert.Equal(new FeatureFlagResponse("new-checkout", true), createdFlag);
+        AssertFlag(createdFlag, "new-checkout", true);
 
         var getResponse = await client.GetAsync("/api/flags/new-checkout");
         var storedFlag = await getResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        Assert.Equal(createdFlag, storedFlag);
+        AssertFlag(storedFlag, "new-checkout", true);
 
         var flags = await client.GetFromJsonAsync<FeatureFlagResponse[]>("/api/flags");
         var listedFlag = Assert.Single(flags!);
-        Assert.Equal(createdFlag, listedFlag);
+        AssertFlag(listedFlag, "new-checkout", true);
 
         var disableResponse = await client.PutAsync("/api/flags/new-checkout/disable", null);
         var disabledFlag = await disableResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
         Assert.Equal(HttpStatusCode.OK, disableResponse.StatusCode);
-        Assert.Equal(new FeatureFlagResponse("new-checkout", false), disabledFlag);
+        AssertFlag(disabledFlag, "new-checkout", false);
 
         var disabledEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/new-checkout/enabled");
         Assert.Equal(new FeatureFlagEvaluationResponse("new-checkout", false), disabledEvaluation);
@@ -42,7 +42,7 @@ public sealed class FeatureFlagApiTests
         var enableResponse = await client.PutAsync("/api/flags/new-checkout/enable", null);
         var enabledFlag = await enableResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
         Assert.Equal(HttpStatusCode.OK, enableResponse.StatusCode);
-        Assert.Equal(new FeatureFlagResponse("new-checkout", true), enabledFlag);
+        AssertFlag(enabledFlag, "new-checkout", true);
 
         var enabledEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/new-checkout/enabled");
         Assert.Equal(new FeatureFlagEvaluationResponse("new-checkout", true), enabledEvaluation);
@@ -85,5 +85,47 @@ public sealed class FeatureFlagApiTests
 
         var unknownEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/unknown/enabled");
         Assert.Equal(new FeatureFlagEvaluationResponse("unknown", false), unknownEvaluation);
+    }
+
+    [Fact]
+    public async Task EvaluationSettingsCanBeCreatedUsedAndUpdated()
+    {
+        using var application = new WebApplicationFactory<Program>();
+        using var client = application.CreateClient();
+
+        var createRequest = new CreateFeatureFlagRequest("targeted-checkout", true, ["user-123"], 100);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", createRequest);
+        var createdFlag = await createResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        AssertFlag(createdFlag, "targeted-checkout", true, ["user-123"], 100);
+
+        var targetedEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/targeted-checkout/enabled?userId=user-123");
+        var excludedEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/targeted-checkout/enabled?userId=user-456");
+
+        Assert.True(targetedEvaluation?.IsEnabled);
+        Assert.False(excludedEvaluation?.IsEnabled);
+
+        var updateRequest = new UpdateFeatureFlagEvaluationRequest(["user-456"], 100);
+        var updateResponse = await client.PutAsJsonAsync("/api/flags/targeted-checkout/evaluation", updateRequest);
+        var updatedFlag = await updateResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        AssertFlag(updatedFlag, "targeted-checkout", true, ["user-456"], 100);
+
+        var previousUserEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/targeted-checkout/enabled?userId=user-123");
+        var newUserEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/targeted-checkout/enabled?userId=user-456");
+
+        Assert.False(previousUserEvaluation?.IsEnabled);
+        Assert.True(newUserEvaluation?.IsEnabled);
+    }
+
+    private static void AssertFlag(FeatureFlagResponse? flag, string key, bool isEnabled, IReadOnlyCollection<string>? targetedUserIds = null, int? rolloutPercentage = null)
+    {
+        Assert.NotNull(flag);
+        Assert.Equal(key, flag.Key);
+        Assert.Equal(isEnabled, flag.IsEnabled);
+        Assert.Equal(targetedUserIds ?? [], flag.TargetedUserIds);
+        Assert.Equal(rolloutPercentage, flag.RolloutPercentage);
     }
 }
