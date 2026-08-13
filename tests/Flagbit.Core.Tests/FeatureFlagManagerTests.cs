@@ -33,6 +33,17 @@ public sealed class FeatureFlagManagerTests
     }
 
     [Fact]
+    public async Task CreateAsyncStoresEvaluationSettings()
+    {
+        var manager = new FeatureFlagManager(new InMemoryFeatureFlagStore());
+
+        var flag = await manager.CreateAsync("new-checkout", true, ["user-123"], 30);
+
+        Assert.Equal(["user-123"], flag.TargetedUserIds);
+        Assert.Equal(30, flag.RolloutPercentage);
+    }
+
+    [Fact]
     public async Task CreateAsyncRejectsDuplicateKey()
     {
         var store = new InMemoryFeatureFlagStore(
@@ -93,6 +104,21 @@ public sealed class FeatureFlagManagerTests
 
         Assert.Same(flag, result);
         Assert.False(result.IsEnabled);
+        Assert.Same(flag, store.LastUpdatedFlag);
+    }
+
+    [Fact]
+    public async Task UpdateEvaluationAsyncChangesAndPersistsSettings()
+    {
+        var flag = new FeatureFlag("new-checkout", true, ["user-123"], 30);
+        var store = new InMemoryFeatureFlagStore(flag);
+        var manager = new FeatureFlagManager(store);
+
+        var result = await manager.UpdateEvaluationAsync("new-checkout", ["user-456"], 50);
+
+        Assert.Same(flag, result);
+        Assert.Equal(["user-456"], result.TargetedUserIds);
+        Assert.Equal(50, result.RolloutPercentage);
         Assert.Same(flag, store.LastUpdatedFlag);
     }
 

@@ -6,27 +6,18 @@ public sealed class FeatureFlag
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        if (rolloutPercentage is < 0 or > 100)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rolloutPercentage));
-        }
-
         Key = key;
         IsEnabled = isEnabled;
-        TargetedUserIds = targetedUserIds?
-            .Where(userId => !string.IsNullOrWhiteSpace(userId))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? [];
-        RolloutPercentage = rolloutPercentage;
+        ConfigureEvaluation(targetedUserIds, rolloutPercentage);
     }
 
     public string Key { get; }
 
     public bool IsEnabled { get; private set; }
 
-    public IReadOnlyCollection<string> TargetedUserIds { get; }
+    public IReadOnlyCollection<string> TargetedUserIds { get; private set; } = [];
 
-    public int? RolloutPercentage { get; }
+    public int? RolloutPercentage { get; private set; }
 
     public void Enable()
     {
@@ -36,5 +27,19 @@ public sealed class FeatureFlag
     public void Disable()
     {
         IsEnabled = false;
+    }
+
+    public void ConfigureEvaluation(IEnumerable<string>? targetedUserIds, int? rolloutPercentage)
+    {
+        if (rolloutPercentage is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rolloutPercentage));
+        }
+
+        TargetedUserIds = targetedUserIds?
+            .Where(userId => !string.IsNullOrWhiteSpace(userId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        RolloutPercentage = rolloutPercentage;
     }
 }

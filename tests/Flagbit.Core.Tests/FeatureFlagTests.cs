@@ -31,6 +31,17 @@ public sealed class FeatureFlagTests
     }
 
     [Fact]
+    public void ConfigureEvaluationReplacesSettings()
+    {
+        var flag = new FeatureFlag("new-checkout", true, ["user-123"], 30);
+
+        flag.ConfigureEvaluation(["user-456", "USER-456", ""], 50);
+
+        Assert.Equal(["user-456"], flag.TargetedUserIds);
+        Assert.Equal(50, flag.RolloutPercentage);
+    }
+
+    [Fact]
     public void EnableSetsFlagToEnabled()
     {
         var flag = new FeatureFlag("new-checkout", false);

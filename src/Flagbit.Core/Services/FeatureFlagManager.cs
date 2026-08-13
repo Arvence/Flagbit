@@ -20,7 +20,12 @@ public sealed class FeatureFlagManager
         return CreateAsync(key, isEnabled: false);
     }
 
-    public async ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled)
+    public ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled)
+    {
+        return CreateAsync(key, isEnabled, targetedUserIds: null, rolloutPercentage: null);
+    }
+
+    public async ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled, IEnumerable<string>? targetedUserIds, int? rolloutPercentage)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
@@ -29,7 +34,7 @@ public sealed class FeatureFlagManager
             throw new FeatureFlagAlreadyExistsException(key);
         }
 
-        var flag = new FeatureFlag(key, isEnabled);
+        var flag = new FeatureFlag(key, isEnabled, targetedUserIds, rolloutPercentage);
         await _store.AddAsync(flag);
 
         return flag;
@@ -56,6 +61,15 @@ public sealed class FeatureFlagManager
     public ValueTask<FeatureFlag> DisableAsync(string key)
     {
         return SetEnabledAsync(key, isEnabled: false);
+    }
+
+    public async ValueTask<FeatureFlag> UpdateEvaluationAsync(string key, IEnumerable<string>? targetedUserIds, int? rolloutPercentage)
+    {
+        var flag = await GetByKeyAsync(key);
+        flag.ConfigureEvaluation(targetedUserIds, rolloutPercentage);
+        await _store.UpdateAsync(flag);
+
+        return flag;
     }
 
     public async ValueTask DeleteAsync(string key)
