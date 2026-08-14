@@ -36,11 +36,19 @@ public sealed class FeatureFlagManagerTests
     public async Task CreateAsyncStoresEvaluationSettings()
     {
         var manager = new FeatureFlagManager(new InMemoryFeatureFlagStore());
+        var startsAt = new DateTimeOffset(2026, 8, 14, 9, 0, 0, TimeSpan.Zero);
+        var endsAt = startsAt.AddHours(2);
+        var rule = new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise");
 
-        var flag = await manager.CreateAsync("new-checkout", true, ["user-123"], 30);
+        var flag = await manager.CreateAsync("new-checkout", true, ["user-123"], 30, ["production"], [rule], startsAt, endsAt, ["accounts"]);
 
         Assert.Equal(["user-123"], flag.TargetedUserIds);
         Assert.Equal(30, flag.RolloutPercentage);
+        Assert.Equal(["production"], flag.Environments);
+        Assert.Equal([rule], flag.Rules);
+        Assert.Equal(startsAt, flag.StartsAt);
+        Assert.Equal(endsAt, flag.EndsAt);
+        Assert.Equal(["accounts"], flag.DependencyKeys);
     }
 
     [Fact]
@@ -113,12 +121,20 @@ public sealed class FeatureFlagManagerTests
         var flag = new FeatureFlag("new-checkout", true, ["user-123"], 30);
         var store = new InMemoryFeatureFlagStore(flag);
         var manager = new FeatureFlagManager(store);
+        var startsAt = new DateTimeOffset(2026, 8, 14, 9, 0, 0, TimeSpan.Zero);
+        var endsAt = startsAt.AddHours(2);
+        var rule = new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise");
 
-        var result = await manager.UpdateEvaluationAsync("new-checkout", ["user-456"], 50);
+        var result = await manager.UpdateEvaluationAsync("new-checkout", ["user-456"], 50, ["production"], [rule], startsAt, endsAt, ["accounts"]);
 
         Assert.Same(flag, result);
         Assert.Equal(["user-456"], result.TargetedUserIds);
         Assert.Equal(50, result.RolloutPercentage);
+        Assert.Equal(["production"], result.Environments);
+        Assert.Equal([rule], result.Rules);
+        Assert.Equal(startsAt, result.StartsAt);
+        Assert.Equal(endsAt, result.EndsAt);
+        Assert.Equal(["accounts"], result.DependencyKeys);
         Assert.Same(flag, store.LastUpdatedFlag);
     }
 

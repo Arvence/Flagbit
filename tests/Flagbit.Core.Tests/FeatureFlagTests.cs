@@ -34,11 +34,62 @@ public sealed class FeatureFlagTests
     public void ConfigureEvaluationReplacesSettings()
     {
         var flag = new FeatureFlag("new-checkout", true, ["user-123"], 30);
+        var startsAt = new DateTimeOffset(2026, 8, 14, 9, 0, 0, TimeSpan.Zero);
+        var endsAt = startsAt.AddHours(2);
+        var rule = new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise");
 
-        flag.ConfigureEvaluation(["user-456", "USER-456", ""], 50);
+        flag.ConfigureEvaluation(["user-456", "USER-456", ""], 50, ["production", "PRODUCTION", ""], [rule], startsAt, endsAt, ["accounts", "ACCOUNTS", ""]);
 
         Assert.Equal(["user-456"], flag.TargetedUserIds);
         Assert.Equal(50, flag.RolloutPercentage);
+        Assert.Equal(["production"], flag.Environments);
+        Assert.Equal([rule], flag.Rules);
+        Assert.Equal(startsAt, flag.StartsAt);
+        Assert.Equal(endsAt, flag.EndsAt);
+        Assert.Equal(["accounts"], flag.DependencyKeys);
+    }
+
+    [Fact]
+    public void ConfigureEvaluationRejectsInvalidSchedule()
+    {
+        var flag = new FeatureFlag("new-checkout", true);
+        var startsAt = new DateTimeOffset(2026, 8, 14, 11, 0, 0, TimeSpan.Zero);
+
+        Assert.Throws<ArgumentException>(() => flag.ConfigureEvaluation(null, null, startsAt: startsAt, endsAt: startsAt.AddHours(-1)));
+    }
+
+    [Fact]
+    public void ConfigureEvaluationRejectsSelfDependency()
+    {
+        var flag = new FeatureFlag("new-checkout", true, targetedUserIds: ["user-123"]);
+
+        Assert.Throws<ArgumentException>(() => flag.ConfigureEvaluation(["user-456"], null, dependencyKeys: ["NEW-CHECKOUT"]));
+        Assert.Equal(["user-123"], flag.TargetedUserIds);
+        Assert.Empty(flag.DependencyKeys);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RuleRejectsMissingAttribute(string? attribute)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => new FeatureFlagRule(attribute!, FeatureFlagRuleOperator.Equals, "enterprise"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RuleRejectsMissingValue(string? value)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, value!));
+    }
+
+    [Fact]
+    public void RuleRejectsUnknownOperator()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new FeatureFlagRule("plan", (FeatureFlagRuleOperator)999, "enterprise"));
     }
 
     [Fact]

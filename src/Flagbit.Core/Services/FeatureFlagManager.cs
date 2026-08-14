@@ -25,7 +25,7 @@ public sealed class FeatureFlagManager
         return CreateAsync(key, isEnabled, targetedUserIds: null, rolloutPercentage: null);
     }
 
-    public async ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled, IEnumerable<string>? targetedUserIds, int? rolloutPercentage)
+    public async ValueTask<FeatureFlag> CreateAsync(string key, bool isEnabled, IEnumerable<string>? targetedUserIds, int? rolloutPercentage, IEnumerable<string>? environments = null, IEnumerable<FeatureFlagRule>? rules = null, DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null, IEnumerable<string>? dependencyKeys = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
@@ -34,7 +34,7 @@ public sealed class FeatureFlagManager
             throw new FeatureFlagAlreadyExistsException(key);
         }
 
-        var flag = new FeatureFlag(key, isEnabled, targetedUserIds, rolloutPercentage);
+        var flag = new FeatureFlag(key, isEnabled, targetedUserIds, rolloutPercentage, environments, rules, startsAt, endsAt, dependencyKeys);
         await _store.AddAsync(flag);
 
         return flag;
@@ -63,10 +63,10 @@ public sealed class FeatureFlagManager
         return SetEnabledAsync(key, isEnabled: false);
     }
 
-    public async ValueTask<FeatureFlag> UpdateEvaluationAsync(string key, IEnumerable<string>? targetedUserIds, int? rolloutPercentage)
+    public async ValueTask<FeatureFlag> UpdateEvaluationAsync(string key, IEnumerable<string>? targetedUserIds, int? rolloutPercentage, IEnumerable<string>? environments = null, IEnumerable<FeatureFlagRule>? rules = null, DateTimeOffset? startsAt = null, DateTimeOffset? endsAt = null, IEnumerable<string>? dependencyKeys = null)
     {
         var flag = await GetByKeyAsync(key);
-        flag.ConfigureEvaluation(targetedUserIds, rolloutPercentage);
+        flag.ConfigureEvaluation(targetedUserIds, rolloutPercentage, environments, rules, startsAt, endsAt, dependencyKeys);
         await _store.UpdateAsync(flag);
 
         return flag;
