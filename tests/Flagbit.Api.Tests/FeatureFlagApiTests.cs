@@ -1,8 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using Flagbit.Api.Contracts;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Flagbit.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Flagbit.Api.Tests;
 
@@ -11,7 +18,7 @@ public sealed class FeatureFlagApiTests
     [Fact]
     public async Task FeatureFlagLifecycleWorks()
     {
-        using var application = new WebApplicationFactory<Program>();
+        using var application = CreateApplication();
         using var client = application.CreateClient();
 
         var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("new-checkout", true));
@@ -22,7 +29,7 @@ public sealed class FeatureFlagApiTests
         var createdFlag = await createResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
         AssertFlag(createdFlag, "new-checkout", true);
 
-        var getResponse = await client.GetAsync("/api/flags/new-checkout");
+        var getResponse = await client.GetAsync("/api/flags/NEW-CHECKOUT");
         var storedFlag = await getResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         AssertFlag(storedFlag, "new-checkout", true);
@@ -47,7 +54,7 @@ public sealed class FeatureFlagApiTests
         var enabledEvaluation = await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/new-checkout/enabled");
         Assert.Equal(new FeatureFlagEvaluationResponse("new-checkout", true), enabledEvaluation);
 
-        var deleteResponse = await client.DeleteAsync("/api/flags/new-checkout");
+        var deleteResponse = await client.DeleteAsync("/api/flags/NEW-CHECKOUT");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         var deletedFlagResponse = await client.GetAsync("/api/flags/new-checkout");
@@ -57,18 +64,18 @@ public sealed class FeatureFlagApiTests
     [Fact]
     public async Task InvalidDuplicateAndUnknownFlagsReturnExpectedResponses()
     {
-        using var application = new WebApplicationFactory<Program>();
+        using var application = CreateApplication();
         using var client = application.CreateClient();
 
         var invalidResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("", false));
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
 
         await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("recommendations", false));
-        var duplicateResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("recommendations", true));
+        var duplicateResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("RECOMMENDATIONS", true));
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
         var duplicateProblem = await duplicateResponse.Content.ReadFromJsonAsync<ProblemDetails>();
         Assert.Equal("Feature flag already exists", duplicateProblem?.Title);
-        Assert.Equal("A feature flag with the key 'recommendations' already exists.", duplicateProblem?.Detail);
+        Assert.Equal("A feature flag with the key 'RECOMMENDATIONS' already exists.", duplicateProblem?.Detail);
         Assert.True(duplicateProblem?.Extensions.ContainsKey("traceId"));
 
         var missingResponse = await client.GetAsync("/api/flags/unknown");
@@ -90,7 +97,7 @@ public sealed class FeatureFlagApiTests
     [Fact]
     public async Task EvaluationSettingsCanBeCreatedUsedAndUpdated()
     {
-        using var application = new WebApplicationFactory<Program>();
+        using var application = CreateApplication();
         using var client = application.CreateClient();
 
         var createRequest = new CreateFeatureFlagRequest("targeted-checkout", true, ["user-123"], 100);
@@ -127,5 +134,21 @@ public sealed class FeatureFlagApiTests
         Assert.Equal(isEnabled, flag.IsEnabled);
         Assert.Equal(targetedUserIds ?? [], flag.TargetedUserIds);
         Assert.Equal(rolloutPercentage, flag.RolloutPercentage);
+    }
+
+    private static WebApplicationFactory<Program> CreateApplication()
+    {
+        var databaseName = $"flagbit-api-tests-{Guid.NewGuid()}";
+
+        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IDbContextOptionsConfiguration<FlagbitDbContext>>();
+                services.RemoveAll<DbContextOptions<FlagbitDbContext>>();
+                services.RemoveAll<FlagbitDbContext>();
+                services.AddDbContext<FlagbitDbContext>(options => options.UseInMemoryDatabase(databaseName));
+            });
+        });
     }
 }
