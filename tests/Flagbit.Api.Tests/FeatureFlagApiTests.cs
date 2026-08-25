@@ -10,11 +10,30 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Flagbit.Api.Tests;
 
-public sealed class FeatureFlagApiTests
+[Collection(PostgreSqlCollection.Name)]
+public sealed class FeatureFlagApiTests : IAsyncLifetime
 {
+    private readonly PostgreSqlFixture _postgreSql;
+
+    public FeatureFlagApiTests(PostgreSqlFixture postgreSql)
+    {
+        _postgreSql = postgreSql;
+    }
+
+    public Task InitializeAsync()
+    {
+        return _postgreSql.ResetDatabaseAsync();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
+
     [Fact]
     public async Task FeatureFlagLifecycleWorks()
     {
@@ -127,6 +146,46 @@ public sealed class FeatureFlagApiTests
         Assert.True(newUserEvaluation?.IsEnabled);
     }
 
+    [Fact]
+    public async Task FeatureFlagPersistsAcrossApplicationRestarts()
+    {
+        using (var firstApplication = CreateApplication())
+        using (var firstClient = firstApplication.CreateClient())
+        {
+            var createResponse = await firstClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("persistent-checkout", true));
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        }
+
+        using var restartedApplication = CreateApplication();
+        using var restartedClient = restartedApplication.CreateClient();
+
+        var persistedFlag = await restartedClient.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/PERSISTENT-CHECKOUT");
+
+        AssertFlag(persistedFlag, "persistent-checkout", true);
+    }
+
+    [Fact]
+    public async Task HealthReturnsOkWhenDatabaseIsReachable()
+    {
+        using var application = CreateApplication();
+        using var client = application.CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task HealthReturnsServiceUnavailableWhenDatabaseIsUnreachable()
+    {
+        using var application = CreateApplication("Host=127.0.0.1;Port=1;Database=flagbit;Username=flagbit;Password=flagbit;Timeout=1");
+        using var client = application.CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
     private static void AssertFlag(FeatureFlagResponse? flag, string key, bool isEnabled, IReadOnlyCollection<string>? targetedUserIds = null, int? rolloutPercentage = null)
     {
         Assert.NotNull(flag);
@@ -136,19 +195,25 @@ public sealed class FeatureFlagApiTests
         Assert.Equal(rolloutPercentage, flag.RolloutPercentage);
     }
 
-    private static WebApplicationFactory<Program> CreateApplication()
+    private WebApplicationFactory<Program> CreateApplication(string? connectionString = null)
     {
-        var databaseName = $"flagbit-api-tests-{Guid.NewGuid()}";
+        var testConnectionString = connectionString ?? _postgreSql.ConnectionString;
 
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<IDbContextOptionsConfiguration<FlagbitDbContext>>();
-                services.RemoveAll<DbContextOptions<FlagbitDbContext>>();
-                services.RemoveAll<FlagbitDbContext>();
-                services.AddDbContext<FlagbitDbContext>(options => options.UseInMemoryDatabase(databaseName));
+                ReplaceDbContext(services, options => options.UseNpgsql(testConnectionString));
             });
         });
+    }
+
+    private static void ReplaceDbContext(IServiceCollection services, Action<DbContextOptionsBuilder> configureOptions)
+    {
+        services.RemoveAll<IDbContextOptionsConfiguration<FlagbitDbContext>>();
+        services.RemoveAll<DbContextOptions<FlagbitDbContext>>();
+        services.RemoveAll<FlagbitDbContext>();
+        services.AddDbContext<FlagbitDbContext>(configureOptions);
     }
 }

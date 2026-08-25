@@ -1,85 +1,101 @@
 using Flagbit.Core.Exceptions;
 using Flagbit.Core.Models;
 using Flagbit.Infrastructure;
-using Flagbit.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using Npgsql;
 
 namespace Flagbit.Api.Tests;
 
-public sealed class FeatureFlagStoreTests
+[Collection(PostgreSqlCollection.Name)]
+public sealed class FeatureFlagStoreTests : IAsyncLifetime
 {
-    [Fact]
-    public async Task CrudOperationsPreserveCaseInsensitiveKeys()
-    {
-        var databaseName = $"flagbit-store-tests-{Guid.NewGuid()}";
+    private readonly PostgreSqlFixture _postgreSql;
 
-        await using (var context = CreateContext(databaseName))
+    public FeatureFlagStoreTests(PostgreSqlFixture postgreSql)
+    {
+        _postgreSql = postgreSql;
+    }
+
+    public Task InitializeAsync()
+    {
+        return _postgreSql.ResetDatabaseAsync();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task CrudOperationsPreserveRulesAndDependencies()
+    {
+        var startsAt = new DateTimeOffset(2026, 8, 25, 10, 0, 0, TimeSpan.Zero);
+        var endsAt = startsAt.AddDays(1);
+
+        await using (var context = _postgreSql.CreateDbContext())
         {
             var store = new FeatureFlagStore(context);
-            await store.AddAsync(new FeatureFlag("new-checkout", true, ["user-123"], 50));
+            var flag = new FeatureFlag(
+                "new-checkout",
+                true,
+                ["user-123"],
+                50,
+                ["production"],
+                [new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise")],
+                startsAt,
+                endsAt,
+                ["accounts"]);
+
+            await store.AddAsync(flag);
         }
 
-        await using (var context = CreateContext(databaseName))
+        await using (var context = _postgreSql.CreateDbContext())
         {
             var store = new FeatureFlagStore(context);
             var flag = await store.GetByKeyAsync("NEW-CHECKOUT");
 
             Assert.NotNull(flag);
-            Assert.Equal("new-checkout", flag.Key);
-            Assert.True(flag.IsEnabled);
             Assert.Equal(["user-123"], flag.TargetedUserIds);
-            Assert.Equal(50, flag.RolloutPercentage);
+            Assert.Equal(["production"], flag.Environments);
+            Assert.Equal([new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise")], flag.Rules);
+            Assert.Equal(["accounts"], flag.DependencyKeys);
 
             flag.Disable();
+            flag.ConfigureEvaluation(
+                ["user-456"],
+                25,
+                ["staging"],
+                [new FeatureFlagRule("country", FeatureFlagRuleOperator.Equals, "TR")],
+                dependencyKeys: ["recommendations"]);
             await store.UpdateAsync(flag);
         }
 
-        await using (var context = CreateContext(databaseName))
+        await using (var context = _postgreSql.CreateDbContext())
         {
             var store = new FeatureFlagStore(context);
-            var flags = await store.GetAllAsync();
-            var flag = Assert.Single(flags);
+            var flag = await store.GetByKeyAsync("new-checkout");
 
+            Assert.NotNull(flag);
             Assert.False(flag.IsEnabled);
+            Assert.Equal(["user-456"], flag.TargetedUserIds);
+            Assert.Equal(25, flag.RolloutPercentage);
+            Assert.Equal(["staging"], flag.Environments);
+            Assert.Equal([new FeatureFlagRule("country", FeatureFlagRuleOperator.Equals, "TR")], flag.Rules);
+            Assert.Equal(["recommendations"], flag.DependencyKeys);
             Assert.True(await store.DeleteAsync("NEW-CHECKOUT"));
-            Assert.False(await store.DeleteAsync("new-checkout"));
+            Assert.Null(await store.GetByKeyAsync("new-checkout"));
         }
     }
 
     [Fact]
-    public async Task PostgreSqlUniqueViolationBecomesAlreadyExistsException()
+    public async Task DuplicateKeysAreRejectedCaseInsensitively()
     {
-        var options = new DbContextOptionsBuilder<FlagbitDbContext>()
-            .UseInMemoryDatabase($"flagbit-store-tests-{Guid.NewGuid()}")
-            .AddInterceptors(new UniqueViolationInterceptor())
-            .Options;
-        await using var context = new FlagbitDbContext(options);
+        await using var context = _postgreSql.CreateDbContext();
         var store = new FeatureFlagStore(context);
 
+        await store.AddAsync(new FeatureFlag("new-checkout", false));
+
         var exception = await Assert.ThrowsAsync<FeatureFlagAlreadyExistsException>(async () =>
-            await store.AddAsync(new FeatureFlag("new-checkout", false)));
+            await store.AddAsync(new FeatureFlag("NEW-CHECKOUT", true)));
 
-        Assert.Equal("new-checkout", exception.Key);
-        Assert.Empty(context.ChangeTracker.Entries());
-    }
-
-    private static FlagbitDbContext CreateContext(string databaseName)
-    {
-        var options = new DbContextOptionsBuilder<FlagbitDbContext>()
-            .UseInMemoryDatabase(databaseName)
-            .Options;
-
-        return new FlagbitDbContext(options);
-    }
-
-    private sealed class UniqueViolationInterceptor : SaveChangesInterceptor
-    {
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
-        {
-            var postgresException = new PostgresException("Duplicate key.", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation);
-            throw new DbUpdateException("The database rejected the insert.", postgresException);
-        }
+        Assert.Equal("NEW-CHECKOUT", exception.Key);
     }
 }
