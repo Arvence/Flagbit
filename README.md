@@ -1,28 +1,14 @@
 # Flagbit
 
-Flagbit is a lightweight feature flag management platform built with C# and .NET. It is designed to let applications enable or disable features without rebuilding or redeploying them.
+> [!IMPORTANT]
+> Flagbit is currently in early development and is not production-ready. Its APIs, data model, and feature set may change as the project evolves.
 
-## Repository structure
+Flagbit is a lightweight feature flag management platform for .NET applications. It is being built to let applications change feature availability without rebuilding or redeploying, while supporting centralized flag management, runtime evaluation, user targeting, percentage rollouts, environments, rules, schedules, and flag dependencies.
 
-- `src/Flagbit.Api` - ASP.NET Core API
-- `src/Flagbit.Core` - domain and business logic
-- `src/Flagbit.Infrastructure` - infrastructure and persistence
-- `src/Flagbit.Json` - API-less local JSON provider
-- `src/Flagbit.Sdk` - reusable .NET client SDK
-- `samples/Flagbit.SampleApi` - example SDK consumer
-- `tests/Flagbit.Api.Tests` - API tests
-- `tests/Flagbit.Sdk.Tests` - SDK tests
+## Technology
 
-## Build
+Flagbit is built with C# and .NET 10. It uses ASP.NET Core for its HTTP API, Entity Framework Core for persistence, and provides a reusable .NET SDK alongside a local JSON provider. Tests are written with xUnit, with Testcontainers used for PostgreSQL integration coverage.
 
-The solution targets .NET 10.
+## PostgreSQL
 
-```bash
-dotnet build Flagbit.sln
-```
-
-## Test
-
-```bash
-dotnet test Flagbit.sln
-```
+PostgreSQL is used to persist feature flag definitions, enabled states, targeting and rollout settings, environments, evaluation rules, schedules, and dependencies. EF Core and Npgsql provide database access and migration support, while Docker is used for the local PostgreSQL environment during development.
