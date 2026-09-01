@@ -16,12 +16,18 @@ builder.Services.AddScoped<FeatureFlagManager>();
 builder.Services.AddScoped<FeatureFlagEvaluator>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<FlagbitDbContext>("postgresql");
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
 
 app.MapGet("/", () => Results.Ok(new { name = "Flagbit API", status = "running" }));
 app.MapHealthChecks("/health");

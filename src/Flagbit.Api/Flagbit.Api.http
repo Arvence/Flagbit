@@ -1,0 +1,96 @@
+@FlagbitApi_HostAddress = http://localhost:5070
+@flagKey = new-checkout
+
+### API status
+GET {{FlagbitApi_HostAddress}}/
+Accept: application/json
+
+### PostgreSQL readiness
+GET {{FlagbitApi_HostAddress}}/health
+
+### OpenAPI document
+GET {{FlagbitApi_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+### Create dependency flag
+POST {{FlagbitApi_HostAddress}}/api/flags
+Content-Type: application/json
+
+{
+  "key": "accounts",
+  "isEnabled": true
+}
+
+### Create advanced feature flag
+POST {{FlagbitApi_HostAddress}}/api/flags
+Content-Type: application/json
+
+{
+  "key": "{{flagKey}}",
+  "isEnabled": true,
+  "targetedUserIds": ["user-123"],
+  "rolloutPercentage": 100,
+  "environments": ["production"],
+  "rules": [
+    {
+      "attribute": "plan",
+      "operator": "Equals",
+      "value": "enterprise"
+    }
+  ],
+  "startsAt": "2025-01-01T00:00:00Z",
+  "endsAt": "2099-01-01T00:00:00Z",
+  "dependencyKeys": ["accounts"]
+}
+
+### List flags
+GET {{FlagbitApi_HostAddress}}/api/flags
+Accept: application/json
+
+### Get flag
+GET {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}
+Accept: application/json
+
+### Update advanced evaluation settings
+PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/evaluation
+Content-Type: application/json
+
+{
+  "targetedUserIds": ["user-123"],
+  "rolloutPercentage": 100,
+  "environments": ["production"],
+  "rules": [
+    {
+      "attribute": "plan",
+      "operator": "Equals",
+      "value": "enterprise"
+    }
+  ],
+  "startsAt": "2025-01-01T00:00:00Z",
+  "endsAt": "2099-01-01T00:00:00Z",
+  "dependencyKeys": ["accounts"]
+}
+
+### Evaluate with complete context
+POST {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/evaluate
+Content-Type: application/json
+
+{
+  "userId": "user-123",
+  "environment": "production",
+  "attributes": {
+    "plan": "enterprise"
+  }
+}
+
+### Disable flag
+PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/disable
+
+### Enable flag
+PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/enable
+
+### Delete feature flag
+DELETE {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}
+
+### Delete dependency flag
+DELETE {{FlagbitApi_HostAddress}}/api/flags/accounts
