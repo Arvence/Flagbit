@@ -20,6 +20,13 @@ internal sealed class FlagbitApiClient
         return await ReadAsync<FeatureFlagResponse[]>(response);
     }
 
+    public async Task<FeatureFlagResponse> GetByKeyAsync(string key)
+    {
+        var path = $"api/flags/{Uri.EscapeDataString(key)}";
+        using var response = await _httpClient.GetAsync(path);
+        return await ReadAsync<FeatureFlagResponse>(response);
+    }
+
     public async Task<FeatureFlagResponse> CreateAsync(string key)
     {
         using var response = await _httpClient.PostAsJsonAsync("api/flags", new CreateFeatureFlagRequest(key));
@@ -35,10 +42,17 @@ internal sealed class FlagbitApiClient
         return await ReadAsync<FeatureFlagResponse>(response);
     }
 
-    public async Task<FeatureFlagEvaluationResponse> EvaluateAsync(string key)
+    public async Task DeleteAsync(string key)
     {
-        var path = $"api/flags/{Uri.EscapeDataString(key)}/enabled";
-        using var response = await _httpClient.GetAsync(path);
+        var path = $"api/flags/{Uri.EscapeDataString(key)}";
+        using var response = await _httpClient.DeleteAsync(path);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<FeatureFlagEvaluationResponse> EvaluateAsync(string key, EvaluateFeatureFlagRequest request)
+    {
+        var path = $"api/flags/{Uri.EscapeDataString(key)}/evaluate";
+        using var response = await _httpClient.PostAsJsonAsync(path, request);
         return await ReadAsync<FeatureFlagEvaluationResponse>(response);
     }
 

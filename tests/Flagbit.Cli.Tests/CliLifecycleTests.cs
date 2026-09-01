@@ -1,5 +1,8 @@
 extern alias FlagbitCli;
 
+using System.Net;
+using System.Net.Http.Json;
+using Flagbit.Api.Contracts;
 using Flagbit.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -35,17 +38,42 @@ public sealed class CliLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CreateEnableEvaluateDisableEvaluateWorks()
+    public async Task CreateGetEnableEvaluateDisableDeleteWorks()
     {
         using var api = CreateApi();
         using var httpClient = api.CreateClient();
         var cli = new CliApplication(new FlagbitApiClient(httpClient));
 
         await AssertCommandAsync(cli, "Created new-checkout (disabled).", "create", "new-checkout");
+        await AssertCommandAsync(cli, "new-checkout is disabled.", "get", "NEW-CHECKOUT");
         await AssertCommandAsync(cli, "new-checkout is enabled.", "enable", "new-checkout");
         await AssertCommandAsync(cli, "new-checkout is enabled.", "evaluate", "new-checkout");
         await AssertCommandAsync(cli, "new-checkout is disabled.", "disable", "new-checkout");
         await AssertCommandAsync(cli, "new-checkout is disabled.", "evaluate", "new-checkout");
+        await AssertCommandAsync(cli, "Deleted new-checkout.", "delete", "new-checkout");
+
+        var deletedResponse = await httpClient.GetAsync("/api/flags/new-checkout");
+        Assert.Equal(HttpStatusCode.NotFound, deletedResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task EvaluateAcceptsUserEnvironmentAndAttributes()
+    {
+        using var api = CreateApi();
+        using var httpClient = api.CreateClient();
+        var cli = new CliApplication(new FlagbitApiClient(httpClient));
+        var scheduleAnchor = DateTimeOffset.UtcNow;
+        scheduleAnchor = scheduleAnchor.AddTicks(-(scheduleAnchor.Ticks % TimeSpan.TicksPerSecond));
+        var startsAt = scheduleAnchor.AddMinutes(-5);
+        var endsAt = scheduleAnchor.AddMinutes(5);
+
+        var dependencyResponse = await httpClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("accounts", true));
+        Assert.Equal(HttpStatusCode.Created, dependencyResponse.StatusCode);
+        var featureResponse = await httpClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("advanced-checkout", true, ["user-123"], 100, ["production"], [new FeatureFlagRuleRequest("plan", "Equals", "enterprise")], startsAt, endsAt, ["accounts"]));
+        Assert.Equal(HttpStatusCode.Created, featureResponse.StatusCode);
+
+        await AssertCommandAsync(cli, "advanced-checkout is enabled.", "evaluate", "advanced-checkout", "--user", "user-123", "--environment", "production", "--attribute", "plan=enterprise");
+        await AssertCommandAsync(cli, "advanced-checkout is disabled.", "evaluate", "advanced-checkout", "--user", "user-123", "--environment", "production", "--attribute", "plan=free");
     }
 
     private WebApplicationFactory<Program> CreateApi()

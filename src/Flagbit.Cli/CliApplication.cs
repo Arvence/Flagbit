@@ -29,10 +29,12 @@ internal sealed class CliApplication
             return command switch
             {
                 "list" when args.Length == 1 => await ListAsync(),
+                "get" when args.Length == 2 => await GetAsync(args[1]),
                 "create" when args.Length == 2 => await CreateAsync(args[1]),
                 "enable" when args.Length == 2 => await ChangeStateAsync(args[1], true),
                 "disable" when args.Length == 2 => await ChangeStateAsync(args[1], false),
-                "evaluate" when args.Length == 2 => await EvaluateAsync(args[1]),
+                "delete" when args.Length == 2 => await DeleteAsync(args[1]),
+                "evaluate" when args.Length >= 2 => await EvaluateAsync(args),
                 _ => InvalidCommand()
             };
         }
@@ -51,6 +53,13 @@ internal sealed class CliApplication
             Console.Error.WriteLine("The Flagbit API returned an invalid response.");
             return 1;
         }
+    }
+
+    private async Task<int> GetAsync(string key)
+    {
+        var flag = await _apiClient.GetByKeyAsync(key);
+        Console.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
+        return 0;
     }
 
     private async Task<int> ListAsync()
@@ -85,11 +94,68 @@ internal sealed class CliApplication
         return 0;
     }
 
-    private async Task<int> EvaluateAsync(string key)
+    private async Task<int> DeleteAsync(string key)
     {
-        var result = await _apiClient.EvaluateAsync(key);
+        await _apiClient.DeleteAsync(key);
+        Console.WriteLine($"Deleted {key}.");
+        return 0;
+    }
+
+    private async Task<int> EvaluateAsync(string[] args)
+    {
+        if (!TryParseEvaluationRequest(args, out var request))
+        {
+            return InvalidCommand();
+        }
+
+        var result = await _apiClient.EvaluateAsync(args[1], request);
         Console.WriteLine($"{result.Key} is {FormatState(result.IsEnabled)}.");
         return 0;
+    }
+
+    private static bool TryParseEvaluationRequest(string[] args, out EvaluateFeatureFlagRequest request)
+    {
+        string? userId = null;
+        string? environment = null;
+        var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 2; index < args.Length; index += 2)
+        {
+            if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
+            {
+                request = new EvaluateFeatureFlagRequest();
+                return false;
+            }
+
+            var option = args[index].ToLowerInvariant();
+            var value = args[index + 1];
+
+            switch (option)
+            {
+                case "--user":
+                    userId = value;
+                    break;
+                case "--environment":
+                    environment = value;
+                    break;
+                case "--attribute":
+                    var separatorIndex = value.IndexOf('=');
+                    if (separatorIndex <= 0 || separatorIndex == value.Length - 1)
+                    {
+                        request = new EvaluateFeatureFlagRequest();
+                        return false;
+                    }
+
+                    attributes[value[..separatorIndex]] = value[(separatorIndex + 1)..];
+                    break;
+                default:
+                    request = new EvaluateFeatureFlagRequest();
+                    return false;
+            }
+        }
+
+        request = new EvaluateFeatureFlagRequest(userId, environment, attributes.Count == 0 ? null : attributes);
+        return true;
     }
 
     private static int InvalidCommand()
@@ -108,9 +174,11 @@ internal sealed class CliApplication
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  flagbit list");
+        Console.WriteLine("  flagbit get <key>");
         Console.WriteLine("  flagbit create <key>");
         Console.WriteLine("  flagbit enable <key>");
         Console.WriteLine("  flagbit disable <key>");
-        Console.WriteLine("  flagbit evaluate <key>");
+        Console.WriteLine("  flagbit delete <key>");
+        Console.WriteLine("  flagbit evaluate <key> [--user <id>] [--environment <name>] [--attribute <key=value>]");
     }
 }
