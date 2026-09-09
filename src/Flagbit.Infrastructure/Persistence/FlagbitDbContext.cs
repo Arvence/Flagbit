@@ -11,6 +11,8 @@ public sealed class FlagbitDbContext : DbContext
 
     internal DbSet<FeatureFlagEntity> FeatureFlags => Set<FeatureFlagEntity>();
 
+    internal DbSet<EvaluationApiKeyEntity> EvaluationApiKeys => Set<EvaluationApiKeyEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
