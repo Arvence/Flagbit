@@ -14,6 +14,7 @@ builder.Services.AddDbContext<FlagbitDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSQL")
         ?? throw new InvalidOperationException("The PostgreSQL connection string is not configured.")));
 builder.Services.AddScoped<IFeatureFlagStore, FeatureFlagStore>();
+builder.Services.AddScoped<EvaluationApiKeyStore>();
 builder.Services.AddScoped<FeatureFlagManager>();
 builder.Services.AddScoped<FeatureFlagEvaluator>();
 builder.Services.AddProblemDetails();
@@ -49,6 +50,7 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => Results.Ok(new { name = "Flagbit API", status = "running" }));
 app.MapHealthChecks("/health");
 app.MapFeatureFlagEndpoints();
+app.MapApiKeyEndpoints();
 
 app.Run();
 

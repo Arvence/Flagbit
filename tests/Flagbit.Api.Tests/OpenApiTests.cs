@@ -33,6 +33,8 @@ public sealed class OpenApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("\"/api/flags\"", document);
         Assert.Contains("\"/api/flags/{key}/evaluate\"", document);
+        Assert.Contains("\"/api/keys\"", document);
+        Assert.Contains("\"/api/keys/{id}\"", document);
     }
 
     private WebApplicationFactory<Program> CreateApplication()

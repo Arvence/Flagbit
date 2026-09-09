@@ -106,6 +106,28 @@ public sealed class CliLifecycleTests : IAsyncLifetime
         await AssertFailedCommandAsync(cli, "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.", "list");
     }
 
+    [Fact]
+    public async Task GeneratedKeyWorksUntilItIsRevoked()
+    {
+        using var api = CreateApi();
+        using var managementClient = api.CreateClient();
+        var managementCli = new CliApplication(new FlagbitApiClient(managementClient, "test-management-key"));
+        await AssertCommandAsync(managementCli, "Created protected-flag (disabled).", "create", "protected-flag");
+        await AssertCommandAsync(managementCli, "protected-flag is enabled.", "enable", "protected-flag");
+
+        using var createResponse = await managementClient.PostAsJsonAsync("/api/keys", new CreateApiKeyRequest("cli-app"));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var key = await createResponse.Content.ReadFromJsonAsync<CreatedApiKeyResponse>();
+        Assert.NotNull(key);
+        using var evaluationClient = api.CreateClient();
+        var evaluationCli = new CliApplication(new FlagbitApiClient(evaluationClient, key.Key));
+        await AssertCommandAsync(evaluationCli, "protected-flag is enabled.", "evaluate", "protected-flag");
+
+        using var revokeResponse = await managementClient.DeleteAsync($"/api/keys/{key.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, revokeResponse.StatusCode);
+        await AssertFailedCommandAsync(evaluationCli, "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.", "evaluate", "protected-flag");
+    }
+
     private WebApplicationFactory<Program> CreateApi()
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using Flagbit.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -13,26 +14,30 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<Authenti
     public const string HeaderName = "X-Api-Key";
 
     private readonly ApiKeyOptions _apiKeys;
+    private readonly EvaluationApiKeyStore _keyStore;
 
-    public ApiKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, IOptions<ApiKeyOptions> apiKeys) : base(options, logger, encoder)
+    public ApiKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, IOptions<ApiKeyOptions> apiKeys, EvaluationApiKeyStore keyStore) : base(options, logger, encoder)
     {
         _apiKeys = apiKeys.Value;
+        _keyStore = keyStore;
     }
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.TryGetValue(HeaderName, out var values))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return AuthenticateResult.NoResult();
         }
 
         if (values.Count != 1 || string.IsNullOrWhiteSpace(values[0]))
         {
-            return Task.FromResult(AuthenticateResult.Fail("Invalid API key."));
+            return AuthenticateResult.Fail("Invalid API key.");
         }
 
-        var providedKey = Encoding.UTF8.GetBytes(values[0]!);
+        var secret = values[0]!;
+        var providedKey = Encoding.UTF8.GetBytes(secret);
         string role;
+        Guid? keyId = null;
 
         if (Matches(providedKey, _apiKeys.ManagementKey))
         {
@@ -44,12 +49,28 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<Authenti
         }
         else
         {
-            return Task.FromResult(AuthenticateResult.Fail("Invalid API key."));
+            if (EvaluationApiKeySecret.HasValidFormat(secret))
+            {
+                keyId = await _keyStore.FindIdByHashAsync(EvaluationApiKeySecret.Hash(secret), Context.RequestAborted);
+            }
+
+            if (keyId is null)
+            {
+                return AuthenticateResult.Fail("Invalid API key.");
+            }
+
+            role = ApiKeyOptions.EvaluationPolicy;
         }
 
         var identity = new ClaimsIdentity([new Claim(ClaimTypes.Role, role)], Scheme.Name);
+
+        if (keyId is not null)
+        {
+            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, keyId.Value.ToString()));
+        }
+
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return AuthenticateResult.Success(ticket);
     }
 
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)

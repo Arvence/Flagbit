@@ -22,11 +22,14 @@ public sealed class ApiKeyAuthenticationTests
     [InlineData("PUT", "/api/flags/protected-flag/enable")]
     [InlineData("PUT", "/api/flags/protected-flag/disable")]
     [InlineData("DELETE", "/api/flags/protected-flag")]
+    [InlineData("GET", "/api/keys")]
+    [InlineData("POST", "/api/keys")]
+    [InlineData("DELETE", "/api/keys/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")]
     public async Task FlagEndpointsRejectMissingInvalidOrMultipleKeys(string method, string path)
     {
         using var application = CreateApplication();
         using var client = application.CreateClient();
-        string[]?[] credentials = [null, [""], ["invalid-key"], ["TEST-MANAGEMENT-KEY"], ["test-management-key", "test-evaluation-key"], ["test-management-key, test-evaluation-key"]];
+        string[]?[] credentials = [null, [""], ["invalid-key"], ["fb_eval_invalid"], ["fb_eval_" + new string('z', 64)], ["TEST-MANAGEMENT-KEY"], ["test-management-key", "test-evaluation-key"], ["test-management-key, test-evaluation-key"]];
 
         foreach (var keys in credentials)
         {
@@ -53,6 +56,9 @@ public sealed class ApiKeyAuthenticationTests
     [InlineData("PUT", "/api/flags/protected-flag/enable")]
     [InlineData("PUT", "/api/flags/protected-flag/disable")]
     [InlineData("DELETE", "/api/flags/protected-flag")]
+    [InlineData("GET", "/api/keys")]
+    [InlineData("POST", "/api/keys")]
+    [InlineData("DELETE", "/api/keys/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")]
     public async Task EvaluationKeyCannotAccessManagementEndpoints(string method, string path)
     {
         using var application = CreateApplication();
