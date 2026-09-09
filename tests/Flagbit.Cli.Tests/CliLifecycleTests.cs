@@ -43,8 +43,7 @@ public sealed class CliLifecycleTests : IAsyncLifetime
     {
         using var api = CreateApi();
         using var httpClient = api.CreateClient();
-        httpClient.DefaultRequestHeaders.Add("X-Api-Key", "test-management-key");
-        var cli = new CliApplication(new FlagbitApiClient(httpClient));
+        var cli = new CliApplication(new FlagbitApiClient(httpClient, "test-management-key"));
 
         await AssertCommandAsync(cli, "Created new-checkout (disabled).", "create", "new-checkout");
         await AssertCommandAsync(cli, "new-checkout is disabled.", "get", "NEW-CHECKOUT");
@@ -63,8 +62,7 @@ public sealed class CliLifecycleTests : IAsyncLifetime
     {
         using var api = CreateApi();
         using var httpClient = api.CreateClient();
-        httpClient.DefaultRequestHeaders.Add("X-Api-Key", "test-management-key");
-        var cli = new CliApplication(new FlagbitApiClient(httpClient));
+        var cli = new CliApplication(new FlagbitApiClient(httpClient, "test-management-key"));
         var scheduleAnchor = DateTimeOffset.UtcNow;
         scheduleAnchor = scheduleAnchor.AddTicks(-(scheduleAnchor.Ticks % TimeSpan.TicksPerSecond));
         var startsAt = scheduleAnchor.AddMinutes(-5);
@@ -77,6 +75,35 @@ public sealed class CliLifecycleTests : IAsyncLifetime
 
         await AssertCommandAsync(cli, "advanced-checkout is enabled.", "evaluate", "advanced-checkout", "--user", "user-123", "--environment", "production", "--attribute", "plan=enterprise");
         await AssertCommandAsync(cli, "advanced-checkout is disabled.", "evaluate", "advanced-checkout", "--user", "user-123", "--environment", "production", "--attribute", "plan=free");
+    }
+
+    [Fact]
+    public async Task EvaluationKeyCanEvaluateButCannotChangeFlags()
+    {
+        using var api = CreateApi();
+        using var managementClient = api.CreateClient();
+        var managementCli = new CliApplication(new FlagbitApiClient(managementClient, "test-management-key"));
+        await AssertCommandAsync(managementCli, "Created protected-flag (disabled).", "create", "protected-flag");
+        await AssertCommandAsync(managementCli, "protected-flag is enabled.", "enable", "protected-flag");
+
+        using var evaluationClient = api.CreateClient();
+        var evaluationCli = new CliApplication(new FlagbitApiClient(evaluationClient, "test-evaluation-key"));
+
+        await AssertCommandAsync(evaluationCli, "protected-flag is enabled.", "evaluate", "protected-flag");
+        await AssertFailedCommandAsync(evaluationCli, "API access denied. This command requires a management API key.", "disable", "protected-flag");
+        await AssertCommandAsync(evaluationCli, "protected-flag is enabled.", "evaluate", "protected-flag");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid-key")]
+    public async Task MissingOrInvalidKeyProducesAnActionableError(string? apiKey)
+    {
+        using var api = CreateApi();
+        using var httpClient = api.CreateClient();
+        var cli = new CliApplication(new FlagbitApiClient(httpClient, apiKey));
+
+        await AssertFailedCommandAsync(cli, "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.", "list");
     }
 
     private WebApplicationFactory<Program> CreateApi()
@@ -97,6 +124,23 @@ public sealed class CliLifecycleTests : IAsyncLifetime
                 services.AddDbContext<FlagbitDbContext>(options => options.UseNpgsql(_postgreSql.ConnectionString));
             });
         });
+    }
+
+    private static async Task AssertFailedCommandAsync(CliApplication cli, string expectedError, params string[] args)
+    {
+        using var error = new StringWriter();
+        var originalError = Console.Error;
+        Console.SetError(error);
+
+        try
+        {
+            Assert.Equal(1, await cli.RunAsync(args));
+            Assert.Equal(expectedError, error.ToString().Trim());
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
     }
 
     private static async Task AssertCommandAsync(CliApplication cli, string expectedOutput, params string[] args)

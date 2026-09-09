@@ -7,11 +7,16 @@ internal sealed class FlagbitApiClient
 {
     private readonly HttpClient _httpClient;
 
-    public FlagbitApiClient(HttpClient httpClient)
+    public FlagbitApiClient(HttpClient httpClient, string? apiKey = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
 
         _httpClient = httpClient;
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            _httpClient.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+        }
     }
 
     public async Task<IReadOnlyCollection<FeatureFlagResponse>> GetAllAsync()

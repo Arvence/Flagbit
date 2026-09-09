@@ -14,7 +14,7 @@ using var httpClient = new HttpClient
     BaseAddress = baseAddress
 };
 
-var apiClient = new FlagbitApiClient(httpClient);
+var apiClient = new FlagbitApiClient(httpClient, Environment.GetEnvironmentVariable("FLAGBIT_API_KEY"));
 var application = new CliApplication(apiClient);
 
 return await application.RunAsync(args);

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using Flagbit.Cli.Api;
 
@@ -40,7 +41,13 @@ internal sealed class CliApplication
         }
         catch (HttpRequestException exception) when (exception.StatusCode is not null)
         {
-            Console.Error.WriteLine($"API request failed: {(int)exception.StatusCode.Value} {exception.StatusCode.Value}.");
+            var message = exception.StatusCode.Value switch
+            {
+                HttpStatusCode.Unauthorized => "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.",
+                HttpStatusCode.Forbidden => "API access denied. This command requires a management API key.",
+                _ => $"API request failed: {(int)exception.StatusCode.Value} {exception.StatusCode.Value}."
+            };
+            Console.Error.WriteLine(message);
             return 1;
         }
         catch (HttpRequestException)
