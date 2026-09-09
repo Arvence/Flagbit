@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Flagbit.Api.Authentication;
 using Flagbit.Api.Contracts;
 using Flagbit.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -38,7 +39,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     public async Task FeatureFlagLifecycleWorks()
     {
         using var application = CreateApplication();
-        using var client = application.CreateClient();
+        using var client = CreateManagementClient(application);
 
         var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("new-checkout", true));
 
@@ -84,7 +85,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     public async Task InvalidDuplicateAndUnknownFlagsReturnExpectedResponses()
     {
         using var application = CreateApplication();
-        using var client = application.CreateClient();
+        using var client = CreateManagementClient(application);
 
         var invalidResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("", false));
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
@@ -122,7 +123,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     public async Task EvaluationSettingsCanBeCreatedUsedAndUpdated()
     {
         using var application = CreateApplication();
-        using var client = application.CreateClient();
+        using var client = CreateManagementClient(application);
 
         var createRequest = new CreateFeatureFlagRequest("targeted-checkout", true, ["user-123"], 100);
         var createResponse = await client.PostAsJsonAsync("/api/flags", createRequest);
@@ -155,7 +156,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     public async Task AdvancedEvaluationUsesEnvironmentAttributesScheduleAndDependencies()
     {
         using var application = CreateApplication();
-        using var client = application.CreateClient();
+        using var client = CreateManagementClient(application);
         var scheduleAnchor = DateTimeOffset.UtcNow;
         scheduleAnchor = scheduleAnchor.AddTicks(-(scheduleAnchor.Ticks % TimeSpan.TicksPerSecond));
         var startsAt = scheduleAnchor.AddMinutes(-5);
@@ -215,7 +216,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         var endsAt = scheduleAnchor.AddMinutes(5);
 
         using (var firstApplication = CreateApplication())
-        using (var firstClient = firstApplication.CreateClient())
+        using (var firstClient = CreateManagementClient(firstApplication))
         {
             var dependencyResponse = await firstClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("accounts", true));
             Assert.Equal(HttpStatusCode.Created, dependencyResponse.StatusCode);
@@ -226,7 +227,7 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         }
 
         using var restartedApplication = CreateApplication();
-        using var restartedClient = restartedApplication.CreateClient();
+        using var restartedClient = CreateManagementClient(restartedApplication);
 
         var persistedFlag = await restartedClient.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/PERSISTENT-CHECKOUT");
 
@@ -238,6 +239,28 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, evaluationResponse.StatusCode);
         Assert.True(evaluation?.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData("test-management-key")]
+    [InlineData("test-evaluation-key")]
+    public async Task BothKeysCanEvaluateFlags(string apiKey)
+    {
+        using var application = CreateApplication();
+        using var managementClient = CreateManagementClient(application);
+        using var createResponse = await managementClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("protected-flag", true));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        using var evaluationClient = application.CreateClient();
+        evaluationClient.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+
+        using var getResponse = await evaluationClient.GetAsync("/api/flags/protected-flag/enabled");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("protected-flag", true), await getResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+
+        using var postResponse = await evaluationClient.PostAsJsonAsync("/api/flags/protected-flag/evaluate", new EvaluateFeatureFlagRequest());
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("protected-flag", true), await postResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
     }
 
     [Fact]
@@ -285,9 +308,21 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services =>
             {
+                services.PostConfigure<ApiKeyOptions>(options =>
+                {
+                    options.ManagementKey = "test-management-key";
+                    options.EvaluationKey = "test-evaluation-key";
+                });
                 ReplaceDbContext(services, options => options.UseNpgsql(testConnectionString));
             });
         });
+    }
+
+    private static HttpClient CreateManagementClient(WebApplicationFactory<Program> application)
+    {
+        var client = application.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", "test-management-key");
+        return client;
     }
 
     private static void ReplaceDbContext(IServiceCollection services, Action<DbContextOptionsBuilder> configureOptions)

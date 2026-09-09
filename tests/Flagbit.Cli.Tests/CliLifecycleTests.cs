@@ -2,6 +2,7 @@ extern alias FlagbitCli;
 
 using System.Net;
 using System.Net.Http.Json;
+using Flagbit.Api.Authentication;
 using Flagbit.Api.Contracts;
 using Flagbit.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -42,6 +43,7 @@ public sealed class CliLifecycleTests : IAsyncLifetime
     {
         using var api = CreateApi();
         using var httpClient = api.CreateClient();
+        httpClient.DefaultRequestHeaders.Add("X-Api-Key", "test-management-key");
         var cli = new CliApplication(new FlagbitApiClient(httpClient));
 
         await AssertCommandAsync(cli, "Created new-checkout (disabled).", "create", "new-checkout");
@@ -61,6 +63,7 @@ public sealed class CliLifecycleTests : IAsyncLifetime
     {
         using var api = CreateApi();
         using var httpClient = api.CreateClient();
+        httpClient.DefaultRequestHeaders.Add("X-Api-Key", "test-management-key");
         var cli = new CliApplication(new FlagbitApiClient(httpClient));
         var scheduleAnchor = DateTimeOffset.UtcNow;
         scheduleAnchor = scheduleAnchor.AddTicks(-(scheduleAnchor.Ticks % TimeSpan.TicksPerSecond));
@@ -83,6 +86,11 @@ public sealed class CliLifecycleTests : IAsyncLifetime
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services =>
             {
+                services.PostConfigure<ApiKeyOptions>(options =>
+                {
+                    options.ManagementKey = "test-management-key";
+                    options.EvaluationKey = "test-evaluation-key";
+                });
                 services.RemoveAll<IDbContextOptionsConfiguration<FlagbitDbContext>>();
                 services.RemoveAll<DbContextOptions<FlagbitDbContext>>();
                 services.RemoveAll<FlagbitDbContext>();

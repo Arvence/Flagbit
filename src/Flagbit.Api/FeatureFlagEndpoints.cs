@@ -1,3 +1,4 @@
+using Flagbit.Api.Authentication;
 using Flagbit.Api.Contracts;
 using Flagbit.Core.Models;
 using Flagbit.Core.Services;
@@ -8,17 +9,17 @@ public static class FeatureFlagEndpoints
 {
     public static IEndpointRouteBuilder MapFeatureFlagEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/flags").WithTags("Feature flags");
+        var group = endpoints.MapGroup("/api/flags").WithTags("Feature flags").RequireAuthorization(ApiKeyOptions.EvaluationPolicy);
 
-        group.MapGet("", GetAllAsync);
+        group.MapGet("", GetAllAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
         group.MapGet("/{key}/enabled", IsEnabledAsync);
-        group.MapGet("/{key}", GetByKeyAsync);
-        group.MapPost("", CreateAsync);
+        group.MapGet("/{key}", GetByKeyAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
+        group.MapPost("", CreateAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
         group.MapPost("/{key}/evaluate", EvaluateAsync);
-        group.MapPut("/{key}/evaluation", UpdateEvaluationAsync);
-        group.MapPut("/{key}/enable", EnableAsync);
-        group.MapPut("/{key}/disable", DisableAsync);
-        group.MapDelete("/{key}", DeleteAsync);
+        group.MapPut("/{key}/evaluation", UpdateEvaluationAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
+        group.MapPut("/{key}/enable", EnableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
+        group.MapPut("/{key}/disable", DisableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
+        group.MapDelete("/{key}", DeleteAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
 
         return endpoints;
     }

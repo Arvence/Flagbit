@@ -1,4 +1,5 @@
 using System.Net;
+using Flagbit.Api.Authentication;
 using Flagbit.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -41,6 +42,11 @@ public sealed class OpenApiTests
             builder.UseEnvironment("Development");
             builder.ConfigureTestServices(services =>
             {
+                services.PostConfigure<ApiKeyOptions>(options =>
+                {
+                    options.ManagementKey = "test-management-key";
+                    options.EvaluationKey = "test-evaluation-key";
+                });
                 services.RemoveAll<IDbContextOptionsConfiguration<FlagbitDbContext>>();
                 services.RemoveAll<DbContextOptions<FlagbitDbContext>>();
                 services.RemoveAll<FlagbitDbContext>();
