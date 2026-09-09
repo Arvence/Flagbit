@@ -14,6 +14,7 @@ Accept: application/json
 
 ### Create dependency flag
 POST {{FlagbitApi_HostAddress}}/api/flags
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Content-Type: application/json
 
 {
@@ -23,6 +24,7 @@ Content-Type: application/json
 
 ### Create advanced feature flag
 POST {{FlagbitApi_HostAddress}}/api/flags
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Content-Type: application/json
 
 {
@@ -45,14 +47,17 @@ Content-Type: application/json
 
 ### List flags
 GET {{FlagbitApi_HostAddress}}/api/flags
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Accept: application/json
 
 ### Get flag
 GET {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Accept: application/json
 
 ### Update advanced evaluation settings
 PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/evaluation
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Content-Type: application/json
 
 {
@@ -73,6 +78,7 @@ Content-Type: application/json
 
 ### Evaluate with complete context
 POST {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/evaluate
+X-Api-Key: {{$processEnv ApiKeys__EvaluationKey}}
 Content-Type: application/json
 
 {
@@ -85,12 +91,16 @@ Content-Type: application/json
 
 ### Disable flag
 PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/disable
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 
 ### Enable flag
 PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/enable
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 
 ### Delete feature flag
 DELETE {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 
 ### Delete dependency flag
 DELETE {{FlagbitApi_HostAddress}}/api/flags/accounts
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
