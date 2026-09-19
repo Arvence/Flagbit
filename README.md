@@ -21,6 +21,36 @@ See the [HTTP API guide](docs/http-api.md) for endpoint contracts, an SDK-free P
 
 PostgreSQL is used to persist feature flag definitions, enabled states, targeting and rollout settings, environments, evaluation rules, schedules, and dependencies. EF Core and Npgsql provide database access and migration support, while Docker is used for the local PostgreSQL environment during development.
 
+## Local startup
+
+Install the .NET 10 SDK and Docker Desktop with Linux containers, and start Docker Desktop. From the repository root, copy `.env.example` to `.env` if you do not already have one, then set its PostgreSQL credentials. Existing PostgreSQL volumes retain their original credentials; changing `.env` does not change the database password.
+
+Set two different API keys in your PowerShell terminal and run the startup script:
+
+```powershell
+$env:ApiKeys__ManagementKey = "<your-management-api-key>"
+$env:ApiKeys__EvaluationKey = "<your-evaluation-api-key>"
+.\scripts\start-local.ps1
+```
+
+The script starts PostgreSQL, waits for its Compose health check, restores the local EF tool, builds the API, applies migrations, and starts the API in Development. It reports readiness only after `/health` returns `200`. Migration or startup failures stop the sequence. Database settings come from the resolved Compose configuration, so a separate development connection-string edit is unnecessary.
+
+The default API address is `http://localhost:5070`. Use `.\scripts\start-local.ps1 -Port 5071` to select another port. API output is written to `artifacts/local/api-<port>.log` and `api-<port>.error.log`. Keep the terminal open; Ctrl+C stops the API while leaving PostgreSQL and its persistent data available. You can stop PostgreSQL separately with `docker compose stop postgres`.
+
+In a second terminal, configure the CLI and try the management flow:
+
+```powershell
+$env:FLAGBIT_API_URL = "http://localhost:5070"
+$env:FLAGBIT_API_KEY = "<your-management-api-key>"
+dotnet run --project .\src\Flagbit.Cli -- create local-checkout
+dotnet run --project .\src\Flagbit.Cli -- get local-checkout
+dotnet run --project .\src\Flagbit.Cli -- enable local-checkout
+dotnet run --project .\src\Flagbit.Cli -- evaluate local-checkout --user user-123 --environment production --attribute plan=enterprise
+dotnet run --project .\src\Flagbit.Cli -- delete local-checkout
+```
+
+The CLI supports repeated `--attribute key=value` options. Configure advanced flag settings through the [HTTP API guide](docs/http-api.md). Evaluation can also use an evaluation key. The script reads API keys from the terminal environment; it does not load them from `.env`.
+
 ## API keys
 
 Every `/api/flags` and `/api/keys` request requires an `X-Api-Key` header. Configure two different keys before starting the API:
