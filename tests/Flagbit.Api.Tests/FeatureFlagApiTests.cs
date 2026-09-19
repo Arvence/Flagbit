@@ -89,6 +89,10 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
 
         var invalidResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("", false));
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+        Assert.Equal("application/problem+json", invalidResponse.Content.Headers.ContentType?.MediaType);
+        var invalidProblem = await invalidResponse.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(invalidProblem);
+        Assert.Contains("key", invalidProblem.Errors.Keys);
 
         var invalidRuleResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("invalid-rule", true, Rules: [new FeatureFlagRuleRequest("plan", "Unknown", "enterprise")]));
         Assert.Equal(HttpStatusCode.BadRequest, invalidRuleResponse.StatusCode);
@@ -98,7 +102,10 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("recommendations", false));
         var duplicateResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("RECOMMENDATIONS", true));
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+        Assert.Equal("application/problem+json", duplicateResponse.Content.Headers.ContentType?.MediaType);
         var duplicateProblem = await duplicateResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal(409, duplicateProblem?.Status);
+        Assert.Equal("/api/flags", duplicateProblem?.Instance);
         Assert.Equal("Feature flag already exists", duplicateProblem?.Title);
         Assert.Equal("A feature flag with the key 'RECOMMENDATIONS' already exists.", duplicateProblem?.Detail);
         Assert.True(duplicateProblem?.Extensions.ContainsKey("traceId"));
@@ -173,6 +180,9 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         AssertFlag(createdFlag, "advanced-checkout", true, ["user-123"], 100, ["production"], [new FeatureFlagRuleResponse("plan", "Equals", "enterprise")], startsAt, endsAt, ["accounts"]);
 
+        var storedFlag = await client.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/advanced-checkout");
+        AssertFlag(storedFlag, "advanced-checkout", true, ["user-123"], 100, ["production"], [new FeatureFlagRuleResponse("plan", "Equals", "enterprise")], startsAt, endsAt, ["accounts"]);
+
         var matchingRequest = new EvaluateFeatureFlagRequest("user-123", "production", new Dictionary<string, string> { ["plan"] = "enterprise" });
         var matchingResponse = await client.PostAsJsonAsync("/api/flags/advanced-checkout/evaluate", matchingRequest);
         var matchingEvaluation = await matchingResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>();
@@ -194,17 +204,160 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         var disabledDependencyEvaluation = await disabledDependencyEvaluationResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>();
         Assert.False(disabledDependencyEvaluation?.IsEnabled);
 
-        var updateRequest = new UpdateFeatureFlagEvaluationRequest(["user-456"], 100, ["staging"], [new FeatureFlagRuleRequest("country", "Equals", "TR")], startsAt, endsAt, []);
+        var updatedStartsAt = startsAt.AddDays(-1);
+        var updatedEndsAt = endsAt.AddDays(1);
+        var updateRequest = new UpdateFeatureFlagEvaluationRequest(["user-456"], 100, ["staging"], [new FeatureFlagRuleRequest("country", "Equals", "TR")], updatedStartsAt, updatedEndsAt, []);
         var updateResponse = await client.PutAsJsonAsync("/api/flags/advanced-checkout/evaluation", updateRequest);
         var updatedFlag = await updateResponse.Content.ReadFromJsonAsync<FeatureFlagResponse>();
 
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
-        AssertFlag(updatedFlag, "advanced-checkout", true, ["user-456"], 100, ["staging"], [new FeatureFlagRuleResponse("country", "Equals", "TR")], startsAt, endsAt, []);
+        AssertFlag(updatedFlag, "advanced-checkout", true, ["user-456"], 100, ["staging"], [new FeatureFlagRuleResponse("country", "Equals", "TR")], updatedStartsAt, updatedEndsAt, []);
 
         var updatedEvaluationRequest = new EvaluateFeatureFlagRequest("user-456", "staging", new Dictionary<string, string> { ["country"] = "TR" });
         var updatedEvaluationResponse = await client.PostAsJsonAsync("/api/flags/advanced-checkout/evaluate", updatedEvaluationRequest);
         var updatedEvaluation = await updatedEvaluationResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>();
         Assert.True(updatedEvaluation?.IsEnabled);
+
+        using var restartedApplication = CreateApplication();
+        using var restartedClient = CreateManagementClient(restartedApplication);
+        var persistedFlag = await restartedClient.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/advanced-checkout");
+        AssertFlag(persistedFlag, "advanced-checkout", true, ["user-456"], 100, ["staging"], [new FeatureFlagRuleResponse("country", "Equals", "TR")], updatedStartsAt, updatedEndsAt, []);
+    }
+
+    [Theory]
+    [InlineData("user-123", true)]
+    [InlineData("user-456", false)]
+    [InlineData(null, false)]
+    public async Task EvaluationAppliesUserTargeting(string? userId, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("targeted", true, ["user-123"]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/api/flags/targeted/evaluate", new EvaluateFeatureFlagRequest(UserId: userId));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("targeted", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+    }
+
+    [Theory]
+    [InlineData(0, "user-123", false)]
+    [InlineData(100, "user-123", true)]
+    [InlineData(100, null, false)]
+    public async Task EvaluationAppliesRolloutBoundaries(int percentage, string? userId, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("rollout", true, RolloutPercentage: percentage));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/api/flags/rollout/evaluate", new EvaluateFeatureFlagRequest(UserId: userId));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("rollout", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+    }
+
+    [Fact]
+    public async Task PartialRolloutAssignsUsersConsistentlyAcrossRequests()
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("rollout", true, RolloutPercentage: 50));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var results = new List<bool>();
+
+        for (var index = 0; index < 20; index++)
+        {
+            var request = new EvaluateFeatureFlagRequest(UserId: $"user-{index}");
+            var firstResponse = await client.PostAsJsonAsync("/api/flags/rollout/evaluate", request);
+            var secondResponse = await client.PostAsJsonAsync("/api/flags/rollout/evaluate", request);
+            Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+            var first = await firstResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>();
+            var second = await secondResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>();
+            Assert.NotNull(first);
+            Assert.Equal(first, second);
+            results.Add(first.IsEnabled);
+        }
+
+        Assert.Contains(true, results);
+        Assert.Contains(false, results);
+    }
+
+    [Theory]
+    [InlineData("production", true)]
+    [InlineData("staging", false)]
+    [InlineData(null, false)]
+    public async Task EvaluationAppliesEnvironmentRestriction(string? environment, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("environment", true, Environments: ["production"]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/api/flags/environment/evaluate", new EvaluateFeatureFlagRequest(Environment: environment));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("environment", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+    }
+
+    [Theory]
+    [InlineData("enterprise", true)]
+    [InlineData("free", false)]
+    [InlineData(null, false)]
+    public async Task EvaluationAppliesAttributeRules(string? plan, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("attributes", true, Rules: [new FeatureFlagRuleRequest("plan", "Equals", "enterprise")]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var attributes = plan is null ? null : new Dictionary<string, string> { ["plan"] = plan };
+
+        var response = await client.PostAsJsonAsync("/api/flags/attributes/evaluate", new EvaluateFeatureFlagRequest(Attributes: attributes));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("attributes", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+    }
+
+    [Theory]
+    [InlineData(-2, -1, false)]
+    [InlineData(1, 2, false)]
+    [InlineData(-1, 1, true)]
+    public async Task EvaluationUsesServerTimeDespiteClientSuppliedTime(int startOffsetDays, int endOffsetDays, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var now = DateTimeOffset.UtcNow;
+        var startsAt = now.AddDays(startOffsetDays);
+        var endsAt = now.AddDays(endOffsetDays);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("scheduled", true, StartsAt: startsAt, EndsAt: endsAt));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var suppliedTime = expected ? endsAt.AddDays(1) : startsAt.AddHours(1);
+        var response = await client.PostAsJsonAsync("/api/flags/scheduled/evaluate", new { currentTime = suppliedTime });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("scheduled", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
+    }
+
+    [Theory]
+    [InlineData("enabled", true)]
+    [InlineData("disabled", false)]
+    [InlineData("missing", false)]
+    [InlineData("cycle", false)]
+    public async Task EvaluationRequiresEnabledDependencies(string dependencyState, bool expected)
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var createResponse = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("dependent", true, DependencyKeys: ["dependency"]));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        if (dependencyState != "missing")
+        {
+            var dependency = new CreateFeatureFlagRequest("dependency", dependencyState != "disabled", DependencyKeys: dependencyState == "cycle" ? ["dependent"] : null);
+            var dependencyResponse = await client.PostAsJsonAsync("/api/flags", dependency);
+            Assert.Equal(HttpStatusCode.Created, dependencyResponse.StatusCode);
+        }
+
+        var response = await client.PostAsJsonAsync("/api/flags/dependent/evaluate", new EvaluateFeatureFlagRequest());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new FeatureFlagEvaluationResponse("dependent", expected), await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>());
     }
 
     [Fact]
