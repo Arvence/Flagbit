@@ -2,6 +2,7 @@ using Flagbit.Api.Authentication;
 using Flagbit.Api.Contracts;
 using Flagbit.Core.Models;
 using Flagbit.Core.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Flagbit.Api;
 
@@ -11,15 +12,29 @@ public static class FeatureFlagEndpoints
     {
         var group = endpoints.MapGroup("/api/flags").WithTags("Feature flags").RequireAuthorization(ApiKeyOptions.EvaluationPolicy);
 
-        group.MapGet("", GetAllAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapGet("/{key}/enabled", IsEnabledAsync);
-        group.MapGet("/{key}", GetByKeyAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapPost("", CreateAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapPost("/{key}/evaluate", EvaluateAsync);
-        group.MapPut("/{key}/evaluation", UpdateEvaluationAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapPut("/{key}/enable", EnableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapPut("/{key}/disable", DisableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
-        group.MapDelete("/{key}", DeleteAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy);
+        group.MapGet("", GetAllAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse[]>();
+        group.MapGet("/{key}/enabled", IsEnabledAsync).Produces<FeatureFlagEvaluationResponse>();
+        group.MapGet("/{key}", GetByKeyAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPost("", CreateAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/{key}/evaluate", EvaluateAsync).Produces<FeatureFlagEvaluationResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+        group.MapPut("/{key}/evaluation", UpdateEvaluationAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPut("/{key}/enable", EnableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapPut("/{key}/disable", DisableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapDelete("/{key}", DeleteAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.WithMetadata(
+            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void)),
+            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void)),
+            new ProducesResponseTypeMetadata(StatusCodes.Status500InternalServerError, typeof(ProblemDetails), ["application/problem+json"]));
 
         return endpoints;
     }
