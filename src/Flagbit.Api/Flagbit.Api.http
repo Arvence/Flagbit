@@ -2,6 +2,9 @@
 @flagKey = new-checkout
 @apiKeyId = 00000000-0000-0000-0000-000000000000
 
+# Run the dependency and feature creation requests before evaluation.
+# Error responses and SDK-free PowerShell examples: ../../docs/http-api.md
+
 ### API status
 GET {{FlagbitApi_HostAddress}}/
 Accept: application/json
@@ -88,6 +91,19 @@ Content-Type: application/json
   "attributes": {
     "plan": "enterprise"
   }
+}
+
+### Evaluate with user-only context (advanced restrictions may return false)
+GET {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/enabled?userId=user-123
+X-Api-Key: {{$processEnv ApiKeys__EvaluationKey}}
+
+### Duplicate key example (409 application/problem+json after creating the flag)
+POST {{FlagbitApi_HostAddress}}/api/flags
+X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
+Content-Type: application/json
+
+{
+  "key": "{{flagKey}}"
 }
 
 ### Disable flag

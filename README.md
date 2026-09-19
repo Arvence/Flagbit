@@ -7,7 +7,15 @@ Flagbit is a lightweight feature flag management platform for .NET applications.
 
 ## Technology
 
-Flagbit is built with C# and .NET 10. It uses ASP.NET Core for its HTTP API, Entity Framework Core for persistence, and provides a reusable .NET SDK alongside a local JSON provider. Tests are written with xUnit, with Testcontainers used for PostgreSQL integration coverage.
+Flagbit is built with C# and .NET 10. It uses ASP.NET Core for its HTTP API, Entity Framework Core for persistence, and provides a reusable .NET SDK. Tests are written with xUnit, with Testcontainers used for PostgreSQL integration coverage.
+
+## Local server scope
+
+The local server supports flag creation, listing, retrieval, evaluation-setting updates, deletion, enable/disable operations, and evaluation with user, environment, and attribute context. PostgreSQL stores definitions and settings across API restarts. HTTP and CLI access work without the SDK; advanced settings are managed over HTTP.
+
+API keys are required in the current version. The SDK and SampleApi are optional clients. A dashboard, user accounts, multiple projects, Redis, and real-time updates are outside the current local server scope. `Flagbit.Json` is a placeholder project; a JSON provider is not implemented.
+
+See the [HTTP API guide](docs/http-api.md) for endpoint contracts, an SDK-free PowerShell walkthrough, evaluation behavior, OpenAPI access, and Problem Details responses.
 
 ## PostgreSQL
 
