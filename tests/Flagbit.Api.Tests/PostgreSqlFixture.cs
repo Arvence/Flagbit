@@ -43,6 +43,6 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
     {
         await using var context = CreateDbContext();
         await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
+        await context.Database.MigrateAsync();
     }
 }

@@ -21,6 +21,7 @@ namespace Flagbit.Api.Tests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ApiKeyManagementTests : IAsyncLifetime
 {
+    private static readonly string[] ExpectedMigrations = ["20260826093617_InitialPostgreSql", "20260909112642_AddEvaluationApiKeys"];
     private readonly PostgreSqlFixture _postgreSql;
 
     public ApiKeyManagementTests(PostgreSqlFixture postgreSql)
@@ -168,21 +169,116 @@ public sealed class ApiKeyManagementTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MigrationsCreateLatestSchemaAndCanBeReappliedWithoutDataLoss()
+    {
+        await using var database = _postgreSql.CreateDbContext();
+        await AssertLatestSchemaAsync(database);
+
+        using var application = CreateApplication();
+        using var managementClient = CreateClient(application, "test-management-key");
+        Assert.Empty((await managementClient.GetFromJsonAsync<FeatureFlagResponse[]>("/api/flags"))!);
+        Assert.Empty((await managementClient.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys"))!);
+        await CreateFlagAsync(managementClient);
+        var key = await CreateKeyAsync(managementClient, "fresh-database-app");
+
+        await AssertReapplyingMigrationsPreservesDataAsync(database);
+
+        using var evaluationClient = CreateClient(application, key.Key);
+        await AssertEvaluationAsync(evaluationClient, HttpStatusCode.OK);
+        var keys = await managementClient.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys");
+        Assert.Equal(key.Id, Assert.Single(keys!).Id);
+
+        using var revokeResponse = await managementClient.DeleteAsync($"/api/keys/{key.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, revokeResponse.StatusCode);
+        await AssertEvaluationAsync(evaluationClient, HttpStatusCode.Unauthorized);
+        using var deleteResponse = await managementClient.DeleteAsync("/api/flags/protected-flag");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        Assert.Empty((await managementClient.GetFromJsonAsync<FeatureFlagResponse[]>("/api/flags"))!);
+        Assert.Empty((await managementClient.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys"))!);
+    }
+
+    [Fact]
     public async Task MigrationPreservesExistingFlagsAndAddsKeyStorage()
     {
         await using var database = _postgreSql.CreateDbContext();
         await database.Database.EnsureDeletedAsync();
-        await database.GetService<IMigrator>().MigrateAsync("20260826093617_InitialPostgreSql");
+        await database.GetService<IMigrator>().MigrateAsync(ExpectedMigrations[0]);
+        Assert.Equal(ExpectedMigrations[0], Assert.Single(await database.Database.GetAppliedMigrationsAsync()));
+        Assert.Equal(ExpectedMigrations[1], Assert.Single(await database.Database.GetPendingMigrationsAsync()));
 
         using var application = CreateApplication();
         using var managementClient = CreateClient(application, "test-management-key");
         await CreateFlagAsync(managementClient);
 
+        var startsAt = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+        var request = new CreateFeatureFlagRequest("Legacy-Checkout", true, ["User-123", "user-456"], 63, ["production", "staging"],
+            [new FeatureFlagRuleRequest("plan", "Equals", "enterprise"), new FeatureFlagRuleRequest("region", "StartsWith", "eu-")],
+            startsAt, startsAt.AddDays(1), ["protected-flag"]);
+        using var created = await managementClient.PostAsJsonAsync("/api/flags", request);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var disabled = await managementClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("disabled-flag"));
+        Assert.Equal(HttpStatusCode.Created, disabled.StatusCode);
+        var flagsBeforeUpgrade = await ReadFlagRowsAsync(database);
+
         await database.Database.MigrateAsync();
-        Assert.False(database.Database.HasPendingModelChanges());
+        await AssertLatestSchemaAsync(database);
+        Assert.Equal(flagsBeforeUpgrade, await ReadFlagRowsAsync(database));
+        Assert.Empty((await managementClient.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys"))!);
         var key = await CreateKeyAsync(managementClient, "migrated-app");
+
+        await AssertReapplyingMigrationsPreservesDataAsync(database);
+
+        var flags = await managementClient.GetFromJsonAsync<FeatureFlagResponse[]>("/api/flags");
+        Assert.Equal(3, flags!.Length);
+        var migratedFlag = await managementClient.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/LEGACY-CHECKOUT");
+        Assert.Equal("Legacy-Checkout", migratedFlag?.Key);
         using var evaluationClient = CreateClient(application, key.Key);
         await AssertEvaluationAsync(evaluationClient, HttpStatusCode.OK);
+    }
+
+    private static async Task AssertLatestSchemaAsync(FlagbitDbContext database)
+    {
+        Assert.Equal(ExpectedMigrations, database.Database.GetMigrations());
+        Assert.Equal(ExpectedMigrations, await database.Database.GetAppliedMigrationsAsync());
+        Assert.Empty(await database.Database.GetPendingMigrationsAsync());
+        Assert.False(database.Database.HasPendingModelChanges());
+    }
+
+    private static async Task AssertReapplyingMigrationsPreservesDataAsync(FlagbitDbContext database)
+    {
+        var flagsBefore = await ReadFlagRowsAsync(database);
+        var keysBefore = await ReadKeyRowsAsync(database);
+        Assert.NotEmpty(flagsBefore);
+        Assert.NotEmpty(keysBefore);
+
+        await database.Database.MigrateAsync();
+
+        await AssertLatestSchemaAsync(database);
+        Assert.Equal(flagsBefore, await ReadFlagRowsAsync(database));
+        Assert.Equal(keysBefore, await ReadKeyRowsAsync(database));
+    }
+
+    private static Task<string[]> ReadFlagRowsAsync(FlagbitDbContext database)
+    {
+        return database.Database.SqlQueryRaw<string>("""
+            SELECT 'feature_flags:' || row_to_json(f)::text AS "Value" FROM feature_flags AS f
+            UNION ALL
+            SELECT 'feature_flag_target_users:' || row_to_json(t)::text FROM feature_flag_target_users AS t
+            UNION ALL
+            SELECT 'feature_flag_environments:' || row_to_json(e)::text FROM feature_flag_environments AS e
+            UNION ALL
+            SELECT 'feature_flag_rules:' || row_to_json(r)::text FROM feature_flag_rules AS r
+            UNION ALL
+            SELECT 'feature_flag_dependencies:' || row_to_json(d)::text FROM feature_flag_dependencies AS d
+            ORDER BY "Value"
+            """).ToArrayAsync();
+    }
+
+    private static Task<string[]> ReadKeyRowsAsync(FlagbitDbContext database)
+    {
+        return database.Database.SqlQueryRaw<string>("""
+            SELECT row_to_json(k)::text AS "Value" FROM evaluation_api_keys AS k ORDER BY id
+            """).ToArrayAsync();
     }
 
     private WebApplicationFactory<Program> CreateApplication()
