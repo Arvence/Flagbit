@@ -20,6 +20,8 @@ Send `X-Api-Key` with every `/api/flags` request. Management keys can use all en
 
 Keys are looked up case-insensitively. URL-encode keys used in request paths. Flag definitions include `key`, `isEnabled`, `targetedUserIds`, `rolloutPercentage`, `environments`, `rules`, `startsAt`, `endsAt`, and `dependencyKeys`.
 
+New flag keys must be nonblank and cannot be exactly `.` or `..`, contain `/`, or contain a null character. These values cannot round-trip through the existing HTTP paths. Other punctuation, spaces, and Unicode are not restricted to a slug format. Encode the entire key as one path segment; a literal percent sign must also be encoded. Keys are not trimmed or renamed, and this creation validation does not rewrite existing definitions.
+
 Creation accepts all these fields. Only `key` is required; `isEnabled` defaults to `false`. Updating `/evaluation` replaces all evaluation settings: omitted collections become empty and omitted rollout/schedule values become `null`. It does not rename the flag or change its enabled state. Send every setting you want to retain.
 
 ## PowerShell walkthrough
@@ -73,12 +75,14 @@ The repository also includes [HTTP editor requests](../src/Flagbit.Api/Flagbit.A
 
 An enabled flag must pass every configured restriction:
 
-- `targetedUserIds`: requires a matching user when the list is nonempty.
-- `rolloutPercentage`: accepts 0–100; a configured percentage requires a user ID, including at 100%. Assignment is deterministic for a flag key and user ID. Targeting does not bypass rollout.
-- `environments`: requires a matching environment when the list is nonempty.
-- `rules`: every rule must match an attribute. Operators are `Equals`, `NotEquals`, `Contains`, `StartsWith`, and `EndsWith`. A missing attribute fails the rule. Attribute names and string comparisons are case-insensitive.
-- `startsAt` / `endsAt`: inclusive schedule bounds expressed as timestamps with an offset; either bound may be omitted. Evaluation uses server UTC time. The request has no client-time field.
-- `dependencyKeys`: every dependency must evaluate to true with the same context. Missing or disabled dependencies and dependency cycles return false.
+- `targetedUserIds`: requires a case-insensitive matching user when the list is nonempty.
+- `rolloutPercentage`: accepts 0–100; a configured percentage requires a nonblank user ID, including at 100%. The bucket is the first four SHA-256 bytes, interpreted as an unsigned big-endian integer, modulo 100. The UTF-8 hash input is the stored flag key, a colon, and the exact supplied user ID. Evaluation succeeds when the bucket is less than the percentage. User-ID casing and whitespace affect assignment; caller key casing does not change the stored key used for hashing. Targeting does not bypass rollout.
+- `environments`: requires a case-insensitive matching environment when the list is nonempty.
+- `rules`: every rule must match an attribute. Operators are `Equals`, `NotEquals`, `Contains`, `StartsWith`, and `EndsWith`. A missing or null attribute fails every operator, including `NotEquals`. Attribute names and string comparisons are case-insensitive. Attribute names that differ only by case are rejected with `400`, even for disabled or missing flags, rather than selecting the first value.
+- `startsAt` / `endsAt`: inclusive schedule bounds; either bound may be omitted. Equal bounds match only that instant. Evaluation captures server UTC time once and passes it through the entire dependency traversal. The request has no client-time field.
+- `dependencyKeys`: every dependency must evaluate to true with the same user, environment, attributes, and time. Dependency identity and self-dependency validation ignore case. Missing or disabled dependencies and dependency cycles return false; a dependency shared by separate branches is not a cycle.
+
+Matching does not trim supplied user IDs, environment names, attribute names, or values. Configuration ignores blank target, environment, and dependency entries and removes case-insensitive duplicates, while preserving the spelling and whitespace of retained entries. Only the configured rule attribute name is trimmed; its value is preserved.
 
 Missing flags evaluate to `200` with `isEnabled: false`. The legacy GET endpoint supplies only `userId`; use POST when environments or attributes are required.
 
