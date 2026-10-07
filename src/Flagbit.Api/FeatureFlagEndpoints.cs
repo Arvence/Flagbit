@@ -74,6 +74,14 @@ public static class FeatureFlagEndpoints
             });
         }
 
+        if (request.Key is "." or ".." || request.Key.Contains('/') || request.Key.Contains('\0'))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["key"] = ["A feature flag key cannot be '.' or '..', or contain '/' or a null character."]
+            });
+        }
+
         var rules = MapRules(request.Rules);
         var flag = await manager.CreateAsync(request.Key, request.IsEnabled, request.TargetedUserIds, request.RolloutPercentage, request.Environments, rules, request.StartsAt, request.EndsAt, request.DependencyKeys);
         var location = $"/api/flags/{Uri.EscapeDataString(flag.Key)}";
