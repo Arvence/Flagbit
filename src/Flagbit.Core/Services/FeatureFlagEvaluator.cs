@@ -26,12 +26,30 @@ public sealed class FeatureFlagEvaluator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(context);
+        ValidateAttributes(context.Attributes);
 
         var evaluationContext = context.CurrentTime is null
             ? context with { CurrentTime = DateTimeOffset.UtcNow }
             : context;
 
         return await IsEnabledAsync(key, evaluationContext, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static void ValidateAttributes(IReadOnlyDictionary<string, string>? attributes)
+    {
+        if (attributes is null)
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in attributes.Keys)
+        {
+            if (!names.Add(name))
+            {
+                throw new ArgumentException("Evaluation attribute names must be unique ignoring case.", nameof(attributes));
+            }
+        }
     }
 
     private async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context, HashSet<string> evaluationPath)
