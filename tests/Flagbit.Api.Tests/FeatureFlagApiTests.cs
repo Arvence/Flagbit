@@ -36,6 +36,33 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task OffsetSchedulesCanBeCreatedUpdatedReadAndEvaluated()
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        var now = DateTimeOffset.UtcNow;
+        now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
+        var start = now.AddMinutes(-5).ToOffset(TimeSpan.FromHours(3));
+        var end = now.AddMinutes(5).ToOffset(TimeSpan.FromHours(-4));
+        using var created = await client.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("offset-schedule", true, StartsAt: start, EndsAt: end));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var stored = await client.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/offset-schedule");
+        Assert.Equal(start.ToUniversalTime(), stored?.StartsAt);
+        Assert.Equal(end.ToUniversalTime(), stored?.EndsAt);
+        Assert.Equal(TimeSpan.Zero, stored?.StartsAt?.Offset);
+        Assert.True((await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/offset-schedule/enabled"))?.IsEnabled);
+
+        using var updated = await client.PutAsJsonAsync("/api/flags/offset-schedule/evaluation", new UpdateFeatureFlagEvaluationRequest(StartsAt: start.AddHours(1), EndsAt: end.AddHours(1)));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.False((await client.GetFromJsonAsync<FeatureFlagEvaluationResponse>("/api/flags/offset-schedule/enabled"))?.IsEnabled);
+        var afterUpdate = await client.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/offset-schedule");
+        Assert.Equal(start.AddHours(1).ToUniversalTime(), afterUpdate?.StartsAt);
+        using var invalid = await client.PutAsJsonAsync("/api/flags/offset-schedule/evaluation", new UpdateFeatureFlagEvaluationRequest(StartsAt: end, EndsAt: start));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Equal(afterUpdate?.StartsAt, (await client.GetFromJsonAsync<FeatureFlagResponse>("/api/flags/offset-schedule"))?.StartsAt);
+    }
+
+    [Fact]
     public async Task FeatureFlagLifecycleWorks()
     {
         using var application = CreateApplication();

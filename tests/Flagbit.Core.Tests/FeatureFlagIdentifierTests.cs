@@ -32,4 +32,19 @@ public sealed class FeatureFlagIdentifierTests
         Assert.False(StringComparer.OrdinalIgnoreCase.Equals(first, second));
         Assert.NotEqual(FeatureFlagIdentifier.Normalize(first), FeatureFlagIdentifier.Normalize(second));
     }
+
+    [Fact]
+    public void SchedulesNormalizeOffsetsWithoutLosingTicksAndValidateInstants()
+    {
+        var start = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.FromHours(3)).AddTicks(17);
+        var end = start.ToOffset(TimeSpan.FromHours(-4));
+        var flag = new FeatureFlag("checkout", true, startsAt: start, endsAt: end);
+
+        Assert.Equal(start.UtcTicks, flag.StartsAt?.Ticks);
+        Assert.Equal(start.UtcTicks, flag.EndsAt?.Ticks);
+        Assert.Equal(TimeSpan.Zero, flag.StartsAt?.Offset);
+        Assert.Equal(TimeSpan.Zero, flag.EndsAt?.Offset);
+        Assert.Throws<ArgumentException>(() => flag.ConfigureEvaluation(null, null, startsAt: start, endsAt: end.AddTicks(-1)));
+        Assert.Equal(start.UtcTicks, flag.EndsAt?.Ticks);
+    }
 }

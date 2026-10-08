@@ -79,8 +79,8 @@ public sealed class FeatureFlag
         RolloutPercentage = rolloutPercentage;
         Environments = configuredEnvironments;
         Rules = configuredRules;
-        StartsAt = startsAt;
-        EndsAt = endsAt;
+        StartsAt = startsAt?.ToUniversalTime();
+        EndsAt = endsAt?.ToUniversalTime();
         DependencyKeys = configuredDependencyKeys;
     }
 }
