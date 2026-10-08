@@ -20,9 +20,13 @@ Send `X-Api-Key` with every `/api/flags` request. Management keys can use all en
 
 Keys are looked up case-insensitively. URL-encode keys used in request paths. Flag definitions include `key`, `isEnabled`, `targetedUserIds`, `rolloutPercentage`, `environments`, `rules`, `startsAt`, `endsAt`, and `dependencyKeys`.
 
+Identifier matching follows .NET ordinal case-insensitive comparison. PostgreSQL stores application-normalized lookup values so its locale does not change key, target-user, environment, or dependency identity. Dotless `\u0131` remains distinct from `i`, and long `\u017f` remains distinct from `s`. Original spelling and whitespace are preserved, including the stored key used for rollout hashing.
+
 New flag keys must be nonblank and cannot be exactly `.` or `..`, contain `/`, or contain a null character. These values cannot round-trip through the existing HTTP paths. Other punctuation, spaces, and Unicode are not restricted to a slug format. Encode the entire key as one path segment; a literal percent sign must also be encoded. Keys are not trimmed or renamed, and this creation validation does not rewrite existing definitions.
 
 Creation accepts all these fields. Only `key` is required; `isEnabled` defaults to `false`. Updating `/evaluation` replaces all evaluation settings: omitted collections become empty and omitted rollout/schedule values become `null`. It does not rename the flag or change its enabled state. Send every setting you want to retain.
+
+Enable/disable writes change only enabled state. Evaluation-setting writes replace settings atomically and preserve enabled state, including when the two operations overlap. Concurrent updates to evaluation settings still use full replacement semantics; the last completed settings write wins.
 
 ## PowerShell walkthrough
 
@@ -79,7 +83,7 @@ An enabled flag must pass every configured restriction:
 - `rolloutPercentage`: accepts 0–100; a configured percentage requires a nonblank user ID, including at 100%. The bucket is the first four SHA-256 bytes, interpreted as an unsigned big-endian integer, modulo 100. The UTF-8 hash input is the stored flag key, a colon, and the exact supplied user ID. Evaluation succeeds when the bucket is less than the percentage. User-ID casing and whitespace affect assignment; caller key casing does not change the stored key used for hashing. Targeting does not bypass rollout.
 - `environments`: requires a case-insensitive matching environment when the list is nonempty.
 - `rules`: every rule must match an attribute. Operators are `Equals`, `NotEquals`, `Contains`, `StartsWith`, and `EndsWith`. A missing or null attribute fails every operator, including `NotEquals`. Attribute names and string comparisons are case-insensitive. Attribute names that differ only by case are rejected with `400`, even for disabled or missing flags, rather than selecting the first value.
-- `startsAt` / `endsAt`: inclusive schedule bounds; either bound may be omitted. Equal bounds match only that instant. Evaluation captures server UTC time once and passes it through the entire dependency traversal. The request has no client-time field.
+- `startsAt` / `endsAt`: inclusive schedule bounds; either bound may be omitted. Valid offset timestamps are converted to UTC without changing the represented instant, and ordering is checked by instant. PostgreSQL persists microsecond precision; finer fractions are truncated by the provider, and evaluation uses the persisted bounds. Equal bounds match only that instant. Evaluation captures server UTC time once and passes it through the entire dependency traversal. The request has no client-time field.
 - `dependencyKeys`: every dependency must evaluate to true with the same user, environment, attributes, and time. Dependency identity and self-dependency validation ignore case. Missing or disabled dependencies and dependency cycles return false; a dependency shared by separate branches is not a cycle.
 
 Matching does not trim supplied user IDs, environment names, attribute names, or values. Configuration ignores blank target, environment, and dependency entries and removes case-insensitive duplicates, while preserving the spelling and whitespace of retained entries. Only the configured rule attribute name is trimmed; its value is preserved.

@@ -21,6 +21,8 @@ See the [HTTP API guide](docs/http-api.md) for endpoint contracts, an SDK-free P
 
 PostgreSQL is used to persist feature flag definitions, enabled states, targeting and rollout settings, environments, evaluation rules, schedules, and dependencies. EF Core and Npgsql provide database access and migration support, while Docker is used for the local PostgreSQL environment during development.
 
+Apply migrations before starting the updated API. The identifier-normalization migration converts the existing generated lookup columns to application-owned values and backfills them using Core's ordinal case-insensitive identity rules. It retains original identifiers, flag IDs, settings, and generated API keys. Stop older API instances before applying this migration because they rely on database-generated lookup values.
+
 ## Local startup
 
 Install the .NET 10 SDK and Docker Desktop with Linux containers, and start Docker Desktop. From the repository root, copy `.env.example` to `.env` if you do not already have one, then set its PostgreSQL credentials. Existing PostgreSQL volumes retain their original credentials; changing `.env` does not change the database password.
