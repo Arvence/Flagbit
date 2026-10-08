@@ -28,7 +28,7 @@ internal sealed class FeatureFlagEnvironmentConfiguration : IEntityTypeConfigura
         builder.Property(environment => environment.NormalizedName)
             .HasColumnName("normalized_name")
             .HasColumnType("text")
-            .HasComputedColumnSql("upper(\"name\")", stored: true);
+            .IsRequired();
 
         builder.HasIndex(environment => new { environment.FeatureFlagId, environment.NormalizedName })
             .IsUnique()

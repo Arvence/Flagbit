@@ -21,7 +21,7 @@ namespace Flagbit.Api.Tests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ApiKeyManagementTests : IAsyncLifetime
 {
-    private static readonly string[] ExpectedMigrations = ["20260826093617_InitialPostgreSql", "20260909112642_AddEvaluationApiKeys"];
+    private static readonly string[] ExpectedMigrations = ["20260826093617_InitialPostgreSql", "20260909112642_AddEvaluationApiKeys", "20261007161637_UseApplicationIdentifierNormalization"];
     private readonly PostgreSqlFixture _postgreSql;
 
     public ApiKeyManagementTests(PostgreSqlFixture postgreSql)
@@ -204,25 +204,31 @@ public sealed class ApiKeyManagementTests : IAsyncLifetime
         await database.Database.EnsureDeletedAsync();
         await database.GetService<IMigrator>().MigrateAsync(ExpectedMigrations[0]);
         Assert.Equal(ExpectedMigrations[0], Assert.Single(await database.Database.GetAppliedMigrationsAsync()));
-        Assert.Equal(ExpectedMigrations[1], Assert.Single(await database.Database.GetPendingMigrationsAsync()));
+        Assert.Equal(ExpectedMigrations.Skip(1), await database.Database.GetPendingMigrationsAsync());
 
-        using var application = CreateApplication();
-        using var managementClient = CreateClient(application, "test-management-key");
-        await CreateFlagAsync(managementClient);
-
-        var startsAt = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
-        var request = new CreateFeatureFlagRequest("Legacy-Checkout", true, ["User-123", "user-456"], 63, ["production", "staging"],
-            [new FeatureFlagRuleRequest("plan", "Equals", "enterprise"), new FeatureFlagRuleRequest("region", "StartsWith", "eu-")],
-            startsAt, startsAt.AddDays(1), ["protected-flag"]);
-        using var created = await managementClient.PostAsJsonAsync("/api/flags", request);
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        using var disabled = await managementClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("disabled-flag"));
-        Assert.Equal(HttpStatusCode.Created, disabled.StatusCode);
+        await database.Database.ExecuteSqlRawAsync("""
+            INSERT INTO feature_flags (key, is_enabled, rollout_percentage, starts_at, ends_at)
+            VALUES ('protected-flag', true, NULL, NULL, NULL),
+                   ('Legacy-Checkout', true, 63, '2026-10-07 12:00:00+00', '2026-10-08 12:00:00+00'),
+                   ('disabled-flag', false, NULL, NULL, NULL);
+            INSERT INTO feature_flag_target_users (feature_flag_id, user_id)
+            SELECT id, u FROM feature_flags CROSS JOIN unnest(ARRAY['User-123', 'user-456']) AS u WHERE key = 'Legacy-Checkout';
+            INSERT INTO feature_flag_environments (feature_flag_id, name)
+            SELECT id, e FROM feature_flags CROSS JOIN unnest(ARRAY['production', 'staging']) AS e WHERE key = 'Legacy-Checkout';
+            INSERT INTO feature_flag_rules (feature_flag_id, position, attribute, operator, value)
+            SELECT id, 0, 'plan', 'Equals', 'enterprise' FROM feature_flags WHERE key = 'Legacy-Checkout';
+            INSERT INTO feature_flag_rules (feature_flag_id, position, attribute, operator, value)
+            SELECT id, 1, 'region', 'StartsWith', 'eu-' FROM feature_flags WHERE key = 'Legacy-Checkout';
+            INSERT INTO feature_flag_dependencies (feature_flag_id, dependency_key)
+            SELECT id, 'protected-flag' FROM feature_flags WHERE key = 'Legacy-Checkout';
+            """);
         var flagsBeforeUpgrade = await ReadFlagRowsAsync(database);
 
         await database.Database.MigrateAsync();
         await AssertLatestSchemaAsync(database);
         Assert.Equal(flagsBeforeUpgrade, await ReadFlagRowsAsync(database));
+        using var application = CreateApplication();
+        using var managementClient = CreateClient(application, "test-management-key");
         Assert.Empty((await managementClient.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys"))!);
         var key = await CreateKeyAsync(managementClient, "migrated-app");
 

@@ -29,7 +29,7 @@ internal sealed class FeatureFlagConfiguration : IEntityTypeConfiguration<Featur
         builder.Property(featureFlag => featureFlag.NormalizedKey)
             .HasColumnName("normalized_key")
             .HasColumnType("text")
-            .HasComputedColumnSql("upper(\"key\")", stored: true);
+            .IsRequired();
 
         builder.Property(featureFlag => featureFlag.IsEnabled)
             .HasColumnName("is_enabled")

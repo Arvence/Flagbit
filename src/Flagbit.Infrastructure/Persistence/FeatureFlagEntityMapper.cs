@@ -41,7 +41,7 @@ internal static class FeatureFlagEntityMapper
         ArgumentNullException.ThrowIfNull(entity);
 
         entity.Key = flag.Key;
-        entity.NormalizedKey = Normalize(flag.Key);
+        entity.NormalizedKey = FeatureFlagIdentifier.Normalize(flag.Key);
         entity.IsEnabled = flag.IsEnabled;
         entity.RolloutPercentage = flag.RolloutPercentage;
         entity.StartsAt = flag.StartsAt;
@@ -53,7 +53,7 @@ internal static class FeatureFlagEntityMapper
             entity.TargetUsers.Add(new FeatureFlagTargetUserEntity
             {
                 UserId = userId,
-                NormalizedUserId = Normalize(userId),
+                NormalizedUserId = FeatureFlagIdentifier.Normalize(userId),
                 FeatureFlag = entity
             });
         }
@@ -64,7 +64,7 @@ internal static class FeatureFlagEntityMapper
             entity.Environments.Add(new FeatureFlagEnvironmentEntity
             {
                 Name = environment,
-                NormalizedName = Normalize(environment),
+                NormalizedName = FeatureFlagIdentifier.Normalize(environment),
                 FeatureFlag = entity
             });
         }
@@ -89,16 +89,9 @@ internal static class FeatureFlagEntityMapper
             entity.Dependencies.Add(new FeatureFlagDependencyEntity
             {
                 DependencyKey = dependencyKey,
-                NormalizedDependencyKey = Normalize(dependencyKey),
+                NormalizedDependencyKey = FeatureFlagIdentifier.Normalize(dependencyKey),
                 FeatureFlag = entity
             });
         }
-    }
-
-    public static string Normalize(string value)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-
-        return value.ToUpperInvariant();
     }
 }

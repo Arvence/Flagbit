@@ -28,7 +28,7 @@ internal sealed class FeatureFlagTargetUserConfiguration : IEntityTypeConfigurat
         builder.Property(targetUser => targetUser.NormalizedUserId)
             .HasColumnName("normalized_user_id")
             .HasColumnType("text")
-            .HasComputedColumnSql("upper(\"user_id\")", stored: true);
+            .IsRequired();
 
         builder.HasIndex(targetUser => new { targetUser.FeatureFlagId, targetUser.NormalizedUserId })
             .IsUnique()

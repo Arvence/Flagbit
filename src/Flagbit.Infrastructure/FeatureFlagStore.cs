@@ -23,7 +23,7 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var normalizedKey = FeatureFlagEntityMapper.Normalize(key);
+        var normalizedKey = FeatureFlagIdentifier.Normalize(key);
         var entity = await FeatureFlagsWithDetails()
             .AsNoTracking()
             .SingleOrDefaultAsync(featureFlag => featureFlag.NormalizedKey == normalizedKey);
@@ -56,7 +56,7 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
     {
         ArgumentNullException.ThrowIfNull(flag);
 
-        var normalizedKey = FeatureFlagEntityMapper.Normalize(flag.Key);
+        var normalizedKey = FeatureFlagIdentifier.Normalize(flag.Key);
         var entity = await FeatureFlagsWithDetails()
             .SingleOrDefaultAsync(featureFlag => featureFlag.NormalizedKey == normalizedKey)
             ?? throw new FeatureFlagNotFoundException(flag.Key);
@@ -69,7 +69,7 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var normalizedKey = FeatureFlagEntityMapper.Normalize(key);
+        var normalizedKey = FeatureFlagIdentifier.Normalize(key);
         var entity = await _dbContext.FeatureFlags
             .SingleOrDefaultAsync(featureFlag => featureFlag.NormalizedKey == normalizedKey);
 

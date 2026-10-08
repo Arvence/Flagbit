@@ -28,7 +28,7 @@ internal sealed class FeatureFlagDependencyConfiguration : IEntityTypeConfigurat
         builder.Property(dependency => dependency.NormalizedDependencyKey)
             .HasColumnName("normalized_dependency_key")
             .HasColumnType("text")
-            .HasComputedColumnSql("upper(\"dependency_key\")", stored: true);
+            .IsRequired();
 
         builder.HasIndex(dependency => new { dependency.FeatureFlagId, dependency.NormalizedDependencyKey })
             .IsUnique()
