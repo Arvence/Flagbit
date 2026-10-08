@@ -36,6 +36,24 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ConcurrentDuplicateCreationReturnsCreatedAndConflict()
+    {
+        using var application = CreateApplication();
+        using var client = CreateManagementClient(application);
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Post, "/api/flags") { Content = JsonContent.Create(new CreateFeatureFlagRequest("concurrent-flag")) };
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Post, "/api/flags") { Content = JsonContent.Create(new CreateFeatureFlagRequest("CONCURRENT-FLAG")) };
+        var firstTask = client.SendAsync(firstRequest);
+        var secondTask = client.SendAsync(secondRequest);
+        using var first = await firstTask;
+        using var second = await secondTask;
+
+        Assert.Equal(new[] { HttpStatusCode.Created, HttpStatusCode.Conflict }, new[] { first.StatusCode, second.StatusCode }.Order());
+        var conflict = first.StatusCode == HttpStatusCode.Conflict ? first : second;
+        Assert.Equal("application/problem+json", conflict.Content.Headers.ContentType?.MediaType);
+        Assert.Single((await client.GetFromJsonAsync<FeatureFlagResponse[]>("/api/flags"))!);
+    }
+
+    [Fact]
     public async Task OffsetSchedulesCanBeCreatedUpdatedReadAndEvaluated()
     {
         using var application = CreateApplication();

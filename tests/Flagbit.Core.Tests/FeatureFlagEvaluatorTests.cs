@@ -414,7 +414,12 @@ public sealed class FeatureFlagEvaluatorTests
             throw new NotSupportedException();
         }
 
-        public ValueTask UpdateAsync(FeatureFlag flag)
+        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
         {
             throw new NotSupportedException();
         }

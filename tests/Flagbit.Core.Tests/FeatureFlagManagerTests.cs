@@ -221,10 +221,26 @@ public sealed class FeatureFlagManagerTests
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask UpdateAsync(FeatureFlag flag)
+        public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        {
+            var flag = await GetByKeyAsync(key) ?? throw new FeatureFlagNotFoundException(key);
+            if (isEnabled)
+            {
+                flag.Enable();
+            }
+            else
+            {
+                flag.Disable();
+            }
+
+            LastUpdatedFlag = flag;
+            return flag;
+        }
+
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
         {
             LastUpdatedFlag = flag;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(flag);
         }
 
         public ValueTask<bool> DeleteAsync(string key)

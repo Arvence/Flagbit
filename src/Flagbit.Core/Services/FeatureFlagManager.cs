@@ -67,9 +67,7 @@ public sealed class FeatureFlagManager
     {
         var flag = await GetByKeyAsync(key);
         flag.ConfigureEvaluation(targetedUserIds, rolloutPercentage, environments, rules, startsAt, endsAt, dependencyKeys);
-        await _store.UpdateAsync(flag);
-
-        return flag;
+        return await _store.UpdateEvaluationAsync(flag);
     }
 
     public async ValueTask DeleteAsync(string key)
@@ -82,23 +80,10 @@ public sealed class FeatureFlagManager
         }
     }
 
-    private async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+    private ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var flag = await GetByKeyAsync(key);
-
-        if (isEnabled)
-        {
-            flag.Enable();
-        }
-        else
-        {
-            flag.Disable();
-        }
-
-        await _store.UpdateAsync(flag);
-
-        return flag;
+        return _store.SetEnabledAsync(key, isEnabled);
     }
 }

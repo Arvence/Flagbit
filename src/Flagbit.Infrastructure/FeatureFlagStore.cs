@@ -52,17 +52,74 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
         await SaveChangesAsync(flag.Key);
     }
 
-    public async ValueTask UpdateAsync(FeatureFlag flag)
+    public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+    {
+        var normalizedKey = FeatureFlagIdentifier.Normalize(key);
+        var affected = await _dbContext.FeatureFlags.Where(flag => flag.NormalizedKey == normalizedKey)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(flag => flag.IsEnabled, isEnabled));
+        if (affected == 0)
+        {
+            throw new FeatureFlagNotFoundException(key);
+        }
+
+        return await GetByKeyAsync(key) ?? throw new FeatureFlagNotFoundException(key);
+    }
+
+    public async ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
     {
         ArgumentNullException.ThrowIfNull(flag);
 
         var normalizedKey = FeatureFlagIdentifier.Normalize(flag.Key);
-        var entity = await FeatureFlagsWithDetails()
-            .SingleOrDefaultAsync(featureFlag => featureFlag.NormalizedKey == normalizedKey)
-            ?? throw new FeatureFlagNotFoundException(flag.Key);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        var affected = await _dbContext.FeatureFlags.Where(entity => entity.NormalizedKey == normalizedKey)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(entity => entity.RolloutPercentage, flag.RolloutPercentage)
+                .SetProperty(entity => entity.StartsAt, flag.StartsAt)
+                .SetProperty(entity => entity.EndsAt, flag.EndsAt));
+        if (affected == 0)
+        {
+            throw new FeatureFlagNotFoundException(flag.Key);
+        }
 
-        FeatureFlagEntityMapper.ApplyToEntity(flag, entity);
+        var id = await _dbContext.FeatureFlags.Where(entity => entity.NormalizedKey == normalizedKey).Select(entity => entity.Id).SingleAsync();
+        await _dbContext.Set<FeatureFlagTargetUserEntity>().Where(child => child.FeatureFlagId == id).ExecuteDeleteAsync();
+        await _dbContext.Set<FeatureFlagEnvironmentEntity>().Where(child => child.FeatureFlagId == id).ExecuteDeleteAsync();
+        await _dbContext.Set<FeatureFlagRuleEntity>().Where(child => child.FeatureFlagId == id).ExecuteDeleteAsync();
+        await _dbContext.Set<FeatureFlagDependencyEntity>().Where(child => child.FeatureFlagId == id).ExecuteDeleteAsync();
+
+        var replacement = FeatureFlagEntityMapper.ToEntity(flag);
+        foreach (var child in replacement.TargetUsers)
+        {
+            child.FeatureFlag = null!;
+            child.FeatureFlagId = id;
+            _dbContext.Add(child);
+        }
+
+        foreach (var child in replacement.Environments)
+        {
+            child.FeatureFlag = null!;
+            child.FeatureFlagId = id;
+            _dbContext.Add(child);
+        }
+
+        foreach (var child in replacement.Rules)
+        {
+            child.FeatureFlag = null!;
+            child.FeatureFlagId = id;
+            _dbContext.Add(child);
+        }
+
+        foreach (var child in replacement.Dependencies)
+        {
+            child.FeatureFlag = null!;
+            child.FeatureFlagId = id;
+            _dbContext.Add(child);
+        }
+
         await SaveChangesAsync(flag.Key);
+        var updated = await GetByKeyAsync(flag.Key) ?? throw new FeatureFlagNotFoundException(flag.Key);
+        await transaction.CommitAsync();
+        return updated;
     }
 
     public async ValueTask<bool> DeleteAsync(string key)
@@ -70,18 +127,7 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
         var normalizedKey = FeatureFlagIdentifier.Normalize(key);
-        var entity = await _dbContext.FeatureFlags
-            .SingleOrDefaultAsync(featureFlag => featureFlag.NormalizedKey == normalizedKey);
-
-        if (entity is null)
-        {
-            return false;
-        }
-
-        _dbContext.FeatureFlags.Remove(entity);
-        await _dbContext.SaveChangesAsync();
-
-        return true;
+        return await _dbContext.FeatureFlags.Where(featureFlag => featureFlag.NormalizedKey == normalizedKey).ExecuteDeleteAsync() > 0;
     }
 
     private IQueryable<FeatureFlagEntity> FeatureFlagsWithDetails()
@@ -111,7 +157,8 @@ public sealed class FeatureFlagStore : IFeatureFlagStore
     {
         return exception.InnerException is PostgresException
         {
-            SqlState: PostgresErrorCodes.UniqueViolation
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "ux_feature_flags_normalized_key"
         };
     }
 }

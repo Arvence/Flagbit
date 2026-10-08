@@ -174,10 +174,26 @@ public sealed class FeatureFlagContractTests
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask UpdateAsync(FeatureFlag flag)
+        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
         {
-            _flags[flag.Key] = flag;
-            return ValueTask.CompletedTask;
+            var flag = _flags[key];
+            if (isEnabled)
+            {
+                flag.Enable();
+            }
+            else
+            {
+                flag.Disable();
+            }
+
+            return ValueTask.FromResult(flag);
+        }
+
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
+        {
+            var stored = _flags[flag.Key];
+            stored.ConfigureEvaluation(flag.TargetedUserIds, flag.RolloutPercentage, flag.Environments, flag.Rules, flag.StartsAt, flag.EndsAt, flag.DependencyKeys);
+            return ValueTask.FromResult(stored);
         }
 
         public ValueTask<bool> DeleteAsync(string key)

@@ -58,14 +58,14 @@ public sealed class FeatureFlagStoreTests : IAsyncLifetime
             Assert.Equal([new FeatureFlagRule("plan", FeatureFlagRuleOperator.Equals, "enterprise")], flag.Rules);
             Assert.Equal(["accounts"], flag.DependencyKeys);
 
-            flag.Disable();
+            await store.SetEnabledAsync(flag.Key, false);
             flag.ConfigureEvaluation(
                 ["user-456"],
                 25,
                 ["staging"],
                 [new FeatureFlagRule("country", FeatureFlagRuleOperator.Equals, "TR")],
                 dependencyKeys: ["recommendations"]);
-            await store.UpdateAsync(flag);
+            await store.UpdateEvaluationAsync(flag);
         }
 
         await using (var context = _postgreSql.CreateDbContext())

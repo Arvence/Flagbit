@@ -30,15 +30,6 @@ internal static class FeatureFlagEntityMapper
         ArgumentNullException.ThrowIfNull(flag);
 
         var entity = new FeatureFlagEntity();
-        ApplyToEntity(flag, entity);
-
-        return entity;
-    }
-
-    public static void ApplyToEntity(FeatureFlag flag, FeatureFlagEntity entity)
-    {
-        ArgumentNullException.ThrowIfNull(flag);
-        ArgumentNullException.ThrowIfNull(entity);
 
         entity.Key = flag.Key;
         entity.NormalizedKey = FeatureFlagIdentifier.Normalize(flag.Key);
@@ -47,7 +38,6 @@ internal static class FeatureFlagEntityMapper
         entity.StartsAt = flag.StartsAt;
         entity.EndsAt = flag.EndsAt;
 
-        entity.TargetUsers.Clear();
         foreach (var userId in flag.TargetedUserIds)
         {
             entity.TargetUsers.Add(new FeatureFlagTargetUserEntity
@@ -58,7 +48,6 @@ internal static class FeatureFlagEntityMapper
             });
         }
 
-        entity.Environments.Clear();
         foreach (var environment in flag.Environments)
         {
             entity.Environments.Add(new FeatureFlagEnvironmentEntity
@@ -69,7 +58,6 @@ internal static class FeatureFlagEntityMapper
             });
         }
 
-        entity.Rules.Clear();
         var position = 0;
         foreach (var rule in flag.Rules)
         {
@@ -83,7 +71,6 @@ internal static class FeatureFlagEntityMapper
             });
         }
 
-        entity.Dependencies.Clear();
         foreach (var dependencyKey in flag.DependencyKeys)
         {
             entity.Dependencies.Add(new FeatureFlagDependencyEntity
@@ -93,5 +80,7 @@ internal static class FeatureFlagEntityMapper
                 FeatureFlag = entity
             });
         }
+
+        return entity;
     }
 }

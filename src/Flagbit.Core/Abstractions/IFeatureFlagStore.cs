@@ -10,7 +10,9 @@ public interface IFeatureFlagStore
 
     ValueTask AddAsync(FeatureFlag flag);
 
-    ValueTask UpdateAsync(FeatureFlag flag);
+    ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled);
+
+    ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag);
 
     ValueTask<bool> DeleteAsync(string key);
 }
