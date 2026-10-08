@@ -1,5 +1,6 @@
 using Flagbit.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace Flagbit.Api.Tests;
@@ -44,5 +45,13 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         await using var context = CreateDbContext();
         await context.Database.EnsureDeletedAsync();
         await context.Database.MigrateAsync();
+    }
+
+    public async Task RestartAsync()
+    {
+        await _container.StopAsync();
+        await _container.StartAsync();
+        using var connection = new NpgsqlConnection(ConnectionString);
+        NpgsqlConnection.ClearPool(connection);
     }
 }

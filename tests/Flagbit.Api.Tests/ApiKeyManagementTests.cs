@@ -242,6 +242,45 @@ public sealed class ApiKeyManagementTests : IAsyncLifetime
         await AssertEvaluationAsync(evaluationClient, HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task DatabaseRestartPreservesFlagsSettingsAndKeyRevocation()
+    {
+        CreatedApiKeyResponse active;
+        CreatedApiKeyResponse revoked;
+        string[] flagsBefore;
+        string[] keysBefore;
+        using (var application = CreateApplication())
+        using (var managementClient = CreateClient(application, "test-management-key"))
+        {
+            await CreateFlagAsync(managementClient);
+            var start = new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.FromHours(3));
+            using var created = await managementClient.PostAsJsonAsync("/api/flags", new CreateFeatureFlagRequest("restart-settings", true, ["user-123"], 50,
+                ["production"], [new FeatureFlagRuleRequest("plan", "Equals", "enterprise")], start, start.AddDays(1), ["protected-flag"]));
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            active = await CreateKeyAsync(managementClient, "active-after-restart");
+            revoked = await CreateKeyAsync(managementClient, "revoked-before-restart");
+            using var revoke = await managementClient.DeleteAsync($"/api/keys/{revoked.Id}");
+            Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
+            await using var database = _postgreSql.CreateDbContext();
+            flagsBefore = await ReadFlagRowsAsync(database);
+            keysBefore = await ReadKeyRowsAsync(database);
+        }
+
+        await _postgreSql.RestartAsync();
+
+        await using var verification = _postgreSql.CreateDbContext();
+        await AssertLatestSchemaAsync(verification);
+        Assert.Equal(flagsBefore, await ReadFlagRowsAsync(verification));
+        Assert.Equal(keysBefore, await ReadKeyRowsAsync(verification));
+        using var restarted = CreateApplication();
+        using var activeClient = CreateClient(restarted, active.Key);
+        using var revokedClient = CreateClient(restarted, revoked.Key);
+        await AssertEvaluationAsync(activeClient, HttpStatusCode.OK);
+        await AssertEvaluationAsync(revokedClient, HttpStatusCode.Unauthorized);
+        using var management = CreateClient(restarted, "test-management-key");
+        Assert.Equal(active.Id, Assert.Single((await management.GetFromJsonAsync<ApiKeyResponse[]>("/api/keys"))!).Id);
+    }
+
     private static async Task AssertLatestSchemaAsync(FlagbitDbContext database)
     {
         Assert.Equal(ExpectedMigrations, database.Database.GetMigrations());
