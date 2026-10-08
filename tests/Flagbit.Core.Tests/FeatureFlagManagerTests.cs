@@ -203,27 +203,27 @@ public sealed class FeatureFlagManagerTests
 
         public FeatureFlag? LastUpdatedFlag { get; private set; }
 
-        public ValueTask<FeatureFlag?> GetByKeyAsync(string key)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult(
                 _flags.SingleOrDefault(flag => flag.Key == key));
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync()
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult<IReadOnlyCollection<FeatureFlag>>(
                 _flags.AsReadOnly());
         }
 
-        public ValueTask AddAsync(FeatureFlag flag)
+        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             _flags.Add(flag);
             return ValueTask.CompletedTask;
         }
 
-        public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
         {
-            var flag = await GetByKeyAsync(key) ?? throw new FeatureFlagNotFoundException(key);
+            var flag = await GetByKeyAsync(key, cancellationToken) ?? throw new FeatureFlagNotFoundException(key);
             if (isEnabled)
             {
                 flag.Enable();
@@ -237,13 +237,13 @@ public sealed class FeatureFlagManagerTests
             return flag;
         }
 
-        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             LastUpdatedFlag = flag;
             return ValueTask.FromResult(flag);
         }
 
-        public ValueTask<bool> DeleteAsync(string key)
+        public ValueTask<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult(_flags.RemoveAll(flag => flag.Key == key) > 0);
         }

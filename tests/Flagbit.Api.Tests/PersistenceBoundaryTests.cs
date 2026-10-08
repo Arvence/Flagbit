@@ -295,25 +295,25 @@ public sealed class PersistenceBoundaryTests : IAsyncLifetime
             _afterRead = afterRead;
         }
 
-        public async ValueTask<FeatureFlag?> GetByKeyAsync(string key)
+        public async ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         {
-            var flag = await _inner.GetByKeyAsync(key);
+            var flag = await _inner.GetByKeyAsync(key, cancellationToken);
             await _afterRead();
             return flag;
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync() => _inner.GetAllAsync();
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default) => _inner.GetAllAsync(cancellationToken);
 
-        public ValueTask AddAsync(FeatureFlag flag) => _inner.AddAsync(flag);
+        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default) => _inner.AddAsync(flag, cancellationToken);
 
-        public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        public async ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
         {
             await _afterRead();
-            return await _inner.SetEnabledAsync(key, isEnabled);
+            return await _inner.SetEnabledAsync(key, isEnabled, cancellationToken);
         }
 
-        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag) => _inner.UpdateEvaluationAsync(flag);
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag, CancellationToken cancellationToken = default) => _inner.UpdateEvaluationAsync(flag, cancellationToken);
 
-        public ValueTask<bool> DeleteAsync(string key) => _inner.DeleteAsync(key);
+        public ValueTask<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => _inner.DeleteAsync(key, cancellationToken);
     }
 }

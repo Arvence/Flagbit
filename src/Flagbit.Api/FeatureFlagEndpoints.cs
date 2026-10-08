@@ -97,12 +97,12 @@ public static class FeatureFlagEndpoints
 
     private static Task<IResult> EnableAsync(string key, FeatureFlagManager manager)
     {
-        return ChangeStateAsync(key, manager.EnableAsync);
+        return ChangeStateAsync(key, flagKey => manager.EnableAsync(flagKey));
     }
 
     private static Task<IResult> DisableAsync(string key, FeatureFlagManager manager)
     {
-        return ChangeStateAsync(key, manager.DisableAsync);
+        return ChangeStateAsync(key, flagKey => manager.DisableAsync(flagKey));
     }
 
     private static async Task<IResult> DeleteAsync(string key, FeatureFlagManager manager)

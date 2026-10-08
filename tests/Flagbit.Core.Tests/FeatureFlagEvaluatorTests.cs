@@ -398,33 +398,33 @@ public sealed class FeatureFlagEvaluatorTests
             _flags = flags.ToDictionary(flag => flag.Key, StringComparer.OrdinalIgnoreCase);
         }
 
-        public ValueTask<FeatureFlag?> GetByKeyAsync(string key)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         {
             _flags.TryGetValue(key, out var flag);
             return ValueTask.FromResult(flag);
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync()
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask AddAsync(FeatureFlag flag)
+        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public ValueTask<bool> DeleteAsync(string key)
+        public ValueTask<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

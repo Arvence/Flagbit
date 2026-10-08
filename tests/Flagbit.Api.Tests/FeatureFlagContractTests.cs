@@ -157,24 +157,24 @@ public sealed class FeatureFlagContractTests
     {
         private readonly ConcurrentDictionary<string, FeatureFlag> _flags = new(StringComparer.OrdinalIgnoreCase);
 
-        public ValueTask<FeatureFlag?> GetByKeyAsync(string key)
+        public ValueTask<FeatureFlag?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         {
             _flags.TryGetValue(key, out var flag);
             return ValueTask.FromResult(flag);
         }
 
-        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync()
+        public ValueTask<IReadOnlyCollection<FeatureFlag>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult<IReadOnlyCollection<FeatureFlag>>(_flags.Values.ToArray());
         }
 
-        public ValueTask AddAsync(FeatureFlag flag)
+        public ValueTask AddAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             _flags[flag.Key] = flag;
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled)
+        public ValueTask<FeatureFlag> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
         {
             var flag = _flags[key];
             if (isEnabled)
@@ -189,14 +189,14 @@ public sealed class FeatureFlagContractTests
             return ValueTask.FromResult(flag);
         }
 
-        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag)
+        public ValueTask<FeatureFlag> UpdateEvaluationAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
         {
             var stored = _flags[flag.Key];
             stored.ConfigureEvaluation(flag.TargetedUserIds, flag.RolloutPercentage, flag.Environments, flag.Rules, flag.StartsAt, flag.EndsAt, flag.DependencyKeys);
             return ValueTask.FromResult(stored);
         }
 
-        public ValueTask<bool> DeleteAsync(string key)
+        public ValueTask<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult(_flags.TryRemove(key, out _));
         }

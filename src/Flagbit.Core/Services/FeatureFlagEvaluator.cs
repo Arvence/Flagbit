@@ -17,22 +17,23 @@ public sealed class FeatureFlagEvaluator
         _store = store;
     }
 
-    public async ValueTask<bool> IsEnabledAsync(string key)
+    public async ValueTask<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default)
     {
-        return await IsEnabledAsync(key, FeatureFlagContext.Empty);
+        return await IsEnabledAsync(key, FeatureFlagContext.Empty, cancellationToken);
     }
 
-    public async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context)
+    public async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateAttributes(context.Attributes);
 
         var evaluationContext = context.CurrentTime is null
             ? context with { CurrentTime = DateTimeOffset.UtcNow }
             : context;
 
-        return await IsEnabledAsync(key, evaluationContext, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        return await IsEnabledAsync(key, evaluationContext, new HashSet<string>(StringComparer.OrdinalIgnoreCase), cancellationToken);
     }
 
     private static void ValidateAttributes(IReadOnlyDictionary<string, string>? attributes)
@@ -52,8 +53,9 @@ public sealed class FeatureFlagEvaluator
         }
     }
 
-    private async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context, HashSet<string> evaluationPath)
+    private async ValueTask<bool> IsEnabledAsync(string key, FeatureFlagContext context, HashSet<string> evaluationPath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!evaluationPath.Add(key))
         {
             return false;
@@ -61,7 +63,7 @@ public sealed class FeatureFlagEvaluator
 
         try
         {
-            var flag = await _store.GetByKeyAsync(key);
+            var flag = await _store.GetByKeyAsync(key, cancellationToken);
 
             if (flag?.IsEnabled != true)
             {
@@ -73,7 +75,7 @@ public sealed class FeatureFlagEvaluator
                 && MatchesEnvironment(flag, context)
                 && MatchesRule(flag, context)
                 && MatchesSchedule(flag, context)
-                && await MatchesDependenciesAsync(flag, context, evaluationPath);
+                && await MatchesDependenciesAsync(flag, context, evaluationPath, cancellationToken);
         }
         finally
         {
@@ -143,11 +145,11 @@ public sealed class FeatureFlagEvaluator
         return MatchesDateTimeRange(flag.StartsAt, flag.EndsAt, currentTime);
     }
 
-    private async ValueTask<bool> MatchesDependenciesAsync(FeatureFlag flag, FeatureFlagContext context, HashSet<string> evaluationPath)
+    private async ValueTask<bool> MatchesDependenciesAsync(FeatureFlag flag, FeatureFlagContext context, HashSet<string> evaluationPath, CancellationToken cancellationToken)
     {
         foreach (var dependencyKey in flag.DependencyKeys)
         {
-            if (!await IsEnabledAsync(dependencyKey, context, evaluationPath))
+            if (!await IsEnabledAsync(dependencyKey, context, evaluationPath, cancellationToken))
             {
                 return false;
             }
