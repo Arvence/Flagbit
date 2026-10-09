@@ -2,7 +2,7 @@
 
 Flagbit can be managed and evaluated through HTTP without the .NET SDK. The default local address is `http://localhost:5070`. PostgreSQL must be available and migrations applied before using flag endpoints. Configure and start the API as described in the [README](../README.md#api-keys).
 
-Send `X-Api-Key` with every `/api/flags` request. Management keys can use all endpoints; evaluation keys can use only the two evaluation endpoints. `/health` and the Development-only `/openapi/v1.json` document do not require a key. `/health` checks database connectivity and returns `503` when PostgreSQL is unavailable.
+Send `X-Api-Key` with every `/api/flags` and `/api/keys` request. Management keys can use all endpoints; configured evaluation keys and generated application keys can use only the two evaluation endpoints. `/health` and the Development-only `/openapi/v1.json` document do not require a key. `/health` checks database connectivity and returns `503` when PostgreSQL is unavailable. It does not verify or apply migrations: a reachable database without tables is healthy. Apply migrations explicitly before serving flag or application-key requests.
 
 ## Endpoints
 
@@ -17,6 +17,11 @@ Send `X-Api-Key` with every `/api/flags` request. Management keys can use all en
 | `DELETE /api/flags/{key}` | `204`, no body |
 | `POST /api/flags/{key}/evaluate` | `200`, `{ "key": "new-checkout", "isEnabled": true }` |
 | `GET /api/flags/{key}/enabled?userId=user-123` | `200`, the same evaluation response with user-only context |
+| `POST /api/keys` | `201`, application-key metadata and the generated secret, with `Cache-Control: no-store` |
+| `GET /api/keys` | `200`, array of application-key metadata without secrets or hashes |
+| `DELETE /api/keys/{id}` | `204`, no body; revokes the application key |
+
+Application-key creation accepts `{ "name": "sample-app" }`. Names are trimmed and must contain 1–100 characters after trimming. Metadata contains `id`, `name`, and `createdAt`; only the creation response also contains `key`. Store that secret when it is returned. PostgreSQL stores its SHA-256 hash, and listing cannot retrieve the secret. Revocation takes effect on subsequent requests across API instances and survives restarts. An unknown or already revoked ID returns `404` Problem Details.
 
 Keys are looked up case-insensitively. URL-encode keys used in request paths. Flag definitions include `key`, `isEnabled`, `targetedUserIds`, `rolloutPercentage`, `environments`, `rules`, `startsAt`, `endsAt`, and `dependencyKeys`.
 
@@ -27,6 +32,10 @@ New flag keys must be nonblank and cannot be exactly `.` or `..`, contain `/`, o
 Creation accepts all these fields. Only `key` is required; `isEnabled` defaults to `false`. Updating `/evaluation` replaces all evaluation settings: omitted collections become empty and omitted rollout/schedule values become `null`. It does not rename the flag or change its enabled state. Send every setting you want to retain.
 
 Enable/disable writes change only enabled state. Evaluation-setting writes replace settings atomically and preserve enabled state, including when the two operations overlap. Concurrent updates to evaluation settings still use full replacement semantics; the last completed settings write wins.
+
+Required request bodies must be JSON objects with JSON-compatible field types. Missing bodies, JSON `null`, malformed JSON, and incorrect field types return `400`. Rollout percentages must be integer JSON numbers from 0 through 100, or `null`; numeric strings are rejected. Rule operators accept the documented names case-insensitively, with surrounding whitespace ignored; numeric enum aliases are rejected. Null rule entries, invalid operators, reversed schedules, and self-dependencies return `400`. Rejected updates preserve the existing flag and its settings.
+
+Request cancellation flows through flag management, both evaluation endpoints, and application-key operations into persistence. Cancelled evaluation does not produce an ordinary disabled result, and request aborts are not reported as internal-server errors. Cancellation cannot undo a write that already committed.
 
 ## PowerShell walkthrough
 
@@ -73,7 +82,7 @@ Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/flags/http-demo-checkout" -H
 Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/flags/http-demo-accounts" -Headers $managementHeaders
 ```
 
-The repository also includes [HTTP editor requests](../src/Flagbit.Api/Flagbit.Api.http). OpenAPI is available only when the API runs in Development. It describes the management/evaluation request and response schemas and documented error responses.
+The repository also includes [HTTP editor requests](../src/Flagbit.Api/Flagbit.Api.http). OpenAPI is available only when the API runs in Development. It describes flag and application-key request/response schemas, error responses, and the `X-Api-Key` header security scheme on protected operations. Operation descriptions distinguish management access from evaluation access. The document can be generated without a database connection.
 
 ## Evaluation behavior
 
@@ -92,7 +101,7 @@ Missing flags evaluate to `200` with `isEnabled: false`. The legacy GET endpoint
 
 ## Error responses
 
-Flag validation and application errors use `application/problem+json`. Handled exceptions contain `status`, `title`, `detail`, `instance`, and `traceId`, along with the standard `type` field. For example, creating a duplicate key returns:
+Flag and application-key validation and application errors use `application/problem+json` in Development and non-Development environments. Handled exceptions contain `status`, `title`, `detail`, `instance`, and `traceId`, along with the standard `type` field. Creation can return either ordinary Problem Details or validation Problem Details with an `errors` dictionary; OpenAPI describes both shapes. For example, creating a duplicate key returns:
 
 ```json
 {
@@ -107,11 +116,16 @@ Flag validation and application errors use `application/problem+json`. Handled e
 
 | Status | Meaning |
 | --- | --- |
-| `400` | Invalid key, rollout outside 0–100, invalid rule, reversed schedule, or self-dependency. A missing/blank create key returns validation Problem Details with an `errors.key` array. |
+| `400` | Invalid body, field type, key, application-key name, rollout, rule, schedule, dependency, or ambiguous evaluation attributes. Invalid create keys and application-key names return validation Problem Details with `errors.key` or `errors.name`. |
 | `401` | Missing, invalid, or multiple API keys; includes `WWW-Authenticate: ApiKey`. |
 | `403` | An evaluation key attempted a management operation. |
-| `404` | A management operation addressed an unknown flag. |
+| `404` | A management operation addressed an unknown flag or application-key ID. |
 | `409` | A flag with the same case-insensitive key already exists. |
+| `415` | A body endpoint received an unsupported media type; send `Content-Type: application/json`. |
 | `500` | Unexpected failure, with a generic error message. |
 
-Authentication responses (`401`/`403`) currently have no Problem Details body. `/health` returns a health status rather than Problem Details. Inspect HTTP status before parsing a response body.
+Framework request exceptions retain their HTTP status, including `408` and `413`, instead of becoming `400`. Unexpected-error logs record the exception type, method, path, and trace identifier without raw exception messages. Configured and generated API-key secrets are not included in error responses or normal application logs.
+
+Error results retain their Problem Details JSON body even when the caller sends a non-JSON `Accept` header.
+
+Authentication responses (`401`/`403`) have no body. `/health` returns a health status rather than Problem Details. Inspect HTTP status before parsing a response body.
