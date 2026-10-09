@@ -12,7 +12,8 @@ public sealed record FeatureFlagRuleRequest(string? Attribute, string? Operator,
 {
     public FeatureFlagRule ToDomain()
     {
-        if (string.IsNullOrWhiteSpace(Operator) || !Enum.TryParse<FeatureFlagRuleOperator>(Operator, true, out var parsedOperator) || !Enum.IsDefined(parsedOperator))
+        if (string.IsNullOrWhiteSpace(Operator) || !Enum.TryParse<FeatureFlagRuleOperator>(Operator, true, out var parsedOperator)
+            || !Enum.IsDefined(parsedOperator) || !string.Equals(Operator.Trim(), parsedOperator.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"'{Operator}' is not a supported feature flag rule operator.", nameof(Operator));
         }

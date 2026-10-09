@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Flagbit.Api;
 using Flagbit.Api.Authentication;
 using Flagbit.Api.ErrorHandling;
@@ -18,6 +19,8 @@ builder.Services.AddScoped<EvaluationApiKeyStore>();
 builder.Services.AddScoped<FeatureFlagManager>();
 builder.Services.AddScoped<FeatureFlagEvaluator>();
 builder.Services.AddProblemDetails();
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddOptions<ApiKeyOptions>()
     .BindConfiguration(ApiKeyOptions.SectionName)
@@ -39,6 +42,13 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseStatusCodePages(async context =>
+{
+    if (context.HttpContext.Response.StatusCode == StatusCodes.Status415UnsupportedMediaType)
+    {
+        await Results.Problem(statusCode: StatusCodes.Status415UnsupportedMediaType).ExecuteAsync(context.HttpContext);
+    }
+});
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -45,6 +45,7 @@ public sealed class ApiKeyAuthenticationTests
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             Assert.Contains(response.Headers.WwwAuthenticate, header => header.Scheme == "ApiKey");
+            Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         }
     }
 
@@ -70,6 +71,7 @@ public sealed class ApiKeyAuthenticationTests
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

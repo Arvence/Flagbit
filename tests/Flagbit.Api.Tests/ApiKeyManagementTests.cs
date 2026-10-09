@@ -94,6 +94,7 @@ public sealed class ApiKeyManagementTests : IAsyncLifetime
             request.Content = JsonContent.Create(new { name = "unauthorized", key = "unauthorized" });
             using var response = await firstClient.SendAsync(request);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         }
 
         using var revokeResponse = await managementClient.DeleteAsync($"/api/keys/{first.Id}");
@@ -382,6 +383,13 @@ public sealed class ApiKeyManagementTests : IAsyncLifetime
         {
             Assert.True((await getResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>())?.IsEnabled);
             Assert.True((await postResponse.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>())?.IsEnabled);
+        }
+        else if (expectedStatus == HttpStatusCode.Unauthorized)
+        {
+            Assert.Empty(await getResponse.Content.ReadAsByteArrayAsync());
+            Assert.Empty(await postResponse.Content.ReadAsByteArrayAsync());
+            Assert.Contains(getResponse.Headers.WwwAuthenticate, header => header.Scheme == "ApiKey");
+            Assert.Contains(postResponse.Headers.WwwAuthenticate, header => header.Scheme == "ApiKey");
         }
     }
 }
