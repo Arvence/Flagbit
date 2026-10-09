@@ -9,6 +9,11 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger, IPr
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken _)
     {
+        if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
+        {
+            return false;
+        }
+
         var (statusCode, title, detail) = MapException(exception);
 
         if (statusCode == StatusCodes.Status500InternalServerError)
