@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Flagbit.Api;
 using Flagbit.Api.Authentication;
 using Flagbit.Api.ErrorHandling;
+using Flagbit.Api.OpenApi;
 using Flagbit.Core.Abstractions;
 using Flagbit.Core.Services;
 using Flagbit.Infrastructure;
@@ -35,7 +36,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(ApiKeyOptions.ManagementPolicy, policy => policy.RequireAuthenticatedUser().RequireRole(ApiKeyOptions.ManagementPolicy));
     options.AddPolicy(ApiKeyOptions.EvaluationPolicy, policy => policy.RequireAuthenticatedUser().RequireRole(ApiKeyOptions.ManagementPolicy, ApiKeyOptions.EvaluationPolicy));
 });
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<ApiOpenApiTransformer>();
+    options.AddOperationTransformer<ApiOpenApiTransformer>();
+});
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<FlagbitDbContext>("postgresql");
 

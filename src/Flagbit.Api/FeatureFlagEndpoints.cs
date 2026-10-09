@@ -19,11 +19,12 @@ public static class FeatureFlagEndpoints
             .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status404NotFound);
         group.MapPost("", CreateAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
             .Produces<FeatureFlagResponse>(StatusCodes.Status201Created)
-            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status415UnsupportedMediaType);
         group.MapPost("/{key}/evaluate", EvaluateAsync).Produces<FeatureFlagEvaluationResponse>()
-            .ProducesProblem(StatusCodes.Status400BadRequest);
+            .ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status415UnsupportedMediaType);
         group.MapPut("/{key}/evaluation", UpdateEvaluationAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
-            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound);
+            .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType);
         group.MapPut("/{key}/enable", EnableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)
             .Produces<FeatureFlagResponse>().ProducesProblem(StatusCodes.Status404NotFound);
         group.MapPut("/{key}/disable", DisableAsync).RequireAuthorization(ApiKeyOptions.ManagementPolicy)

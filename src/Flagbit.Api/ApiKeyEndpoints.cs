@@ -1,6 +1,7 @@
 using Flagbit.Api.Authentication;
 using Flagbit.Api.Contracts;
 using Flagbit.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Flagbit.Api;
 
@@ -10,9 +11,15 @@ public static class ApiKeyEndpoints
     {
         var group = endpoints.MapGroup("/api/keys").WithTags("API keys").RequireAuthorization(ApiKeyOptions.ManagementPolicy);
 
-        group.MapPost("", CreateAsync);
-        group.MapGet("", GetAllAsync);
-        group.MapDelete("/{id:guid}", DeleteAsync);
+        group.MapPost("", CreateAsync).Produces<CreatedApiKeyResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem().ProducesProblem(StatusCodes.Status415UnsupportedMediaType);
+        group.MapGet("", GetAllAsync).Produces<ApiKeyResponse[]>();
+        group.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.WithMetadata(
+            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void)),
+            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void)),
+            new ProducesResponseTypeMetadata(StatusCodes.Status500InternalServerError, typeof(ProblemDetails), ["application/problem+json"]));
 
         return endpoints;
     }
