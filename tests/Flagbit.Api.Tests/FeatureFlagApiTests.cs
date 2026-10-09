@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -470,6 +471,24 @@ public sealed class FeatureFlagApiTests : IAsyncLifetime
         var response = await client.GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task StartupAndHealthCheckDoNotApplyMigrationsToAReachableEmptyDatabase()
+    {
+        await using var database = _postgreSql.CreateDbContext();
+        await database.Database.EnsureDeletedAsync();
+        var creator = database.GetService<IRelationalDatabaseCreator>();
+        await creator.CreateAsync();
+        using var application = CreateApplication();
+        using var client = application.CreateClient();
+
+        using var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
+        Assert.False(await creator.HasTablesAsync());
+        Assert.Empty(await database.Database.GetAppliedMigrationsAsync());
     }
 
     [Fact]
