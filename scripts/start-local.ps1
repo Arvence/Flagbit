@@ -1,9 +1,10 @@
-param([ValidateRange(1024, 65535)][int]$Port = 5070)
+param([ValidateRange(1024, 65535)][int]$Port = 5070, [string]$EnvFile = '.env', [switch]$PrepareOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $apiProcess = $null
 $savedEnvironment = @{}
+$preparationCompleted = $false
 
 foreach ($name in @('ConnectionStrings__PostgreSQL', 'ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'ASPNETCORE_URLS')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -18,8 +19,13 @@ try {
         }
     }
 
-    if (-not (Test-Path -LiteralPath '.env')) {
-        throw 'Copy .env.example to .env and configure PostgreSQL before starting Flagbit.'
+    $sdkVersions = & dotnet --list-sdks
+    if ($LASTEXITCODE -ne 0 -or -not ($sdkVersions -match '^10\.')) {
+        throw 'The .NET 10 SDK is required. Install it before starting Flagbit.'
+    }
+
+    if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) {
+        throw 'Copy .env.example to .env and configure PostgreSQL, or select an existing file with -EnvFile.'
     }
 
     if ([string]::IsNullOrWhiteSpace($env:ApiKeys__ManagementKey) -or [string]::IsNullOrWhiteSpace($env:ApiKeys__EvaluationKey)) {
@@ -28,6 +34,12 @@ try {
 
     if ($env:ApiKeys__ManagementKey -ceq $env:ApiKeys__EvaluationKey) {
         throw 'Management and evaluation API keys must be different.'
+    }
+
+    foreach ($key in @($env:ApiKeys__ManagementKey, $env:ApiKeys__EvaluationKey)) {
+        if ($key -match '[^\x20-\x7E]') {
+            throw 'API keys must contain only printable ASCII characters suitable for HTTP headers.'
+        }
     }
 
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
@@ -41,15 +53,25 @@ try {
         $listener.Stop()
     }
 
-    $composeJson = & docker compose config --format json
+    try {
+        $dockerOs = & docker info --format '{{.OSType}}' 2>$null
+    }
+    catch {
+        $dockerOs = $null
+    }
+    if ($LASTEXITCODE -ne 0 -or $dockerOs -ne 'linux') {
+        throw 'Start Docker Desktop with Linux containers before starting Flagbit.'
+    }
+
+    $composeJson = & docker compose --env-file $EnvFile config --format json
     if ($LASTEXITCODE -ne 0) {
-        throw 'Could not resolve Docker Compose configuration. Check .env and docker-compose.yml.'
+        throw 'Could not resolve Docker Compose configuration. Check the selected environment file and docker-compose.yml.'
     }
 
     $postgres = ($composeJson -join "`n" | ConvertFrom-Json).services.postgres
     foreach ($name in @('POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD')) {
         if ([string]::IsNullOrWhiteSpace($postgres.environment.$name)) {
-            throw "$name must be configured in .env."
+            throw "$name must be configured in the selected environment file."
         }
     }
 
@@ -70,7 +92,7 @@ try {
     $env:ASPNETCORE_URLS = "http://localhost:$Port"
 
     Write-Host 'Starting PostgreSQL and waiting for readiness...'
-    & docker compose up -d --wait --wait-timeout 120 postgres
+    & docker compose --env-file $EnvFile up -d --wait --wait-timeout 120 postgres
     if ($LASTEXITCODE -ne 0) {
         throw 'PostgreSQL did not become ready. Check Docker Desktop and docker compose logs postgres.'
     }
@@ -88,7 +110,15 @@ try {
     Write-Host 'Applying database migrations...'
     & dotnet tool run dotnet-ef database update --project .\src\Flagbit.Infrastructure --startup-project .\src\Flagbit.Api --no-build
     if ($LASTEXITCODE -ne 0) {
-        throw 'Database migration failed. Verify that .env credentials match the existing PostgreSQL volume.'
+        throw 'Database migration failed. Check the migration output and verify that the selected environment file matches the existing PostgreSQL volume.'
+    }
+
+    if ($PrepareOnly) {
+        $preparationCompleted = $true
+        Write-Host 'PostgreSQL is ready and migrations are applied. No API process was started.'
+        Write-Host 'The resolved connection string and development environment remain set in this terminal.'
+        Write-Host 'Launch the API or a new IDE process from this terminal. Existing IDE processes do not inherit these settings.'
+        return
     }
 
     $logDirectory = Join-Path $repositoryRoot 'artifacts\local'
@@ -137,10 +167,17 @@ try {
 finally {
     if ($null -ne $apiProcess -and -not $apiProcess.HasExited) {
         Stop-Process -Id $apiProcess.Id
+        $apiProcess.WaitForExit()
     }
 
-    foreach ($name in $savedEnvironment.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process')
+    if ($null -ne $apiProcess) {
+        $apiProcess.Dispose()
+    }
+
+    if (-not $preparationCompleted) {
+        foreach ($name in $savedEnvironment.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process')
+        }
     }
 
     Pop-Location

@@ -113,6 +113,7 @@ public sealed class ApiKeyAuthenticationTests
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.UseSetting("ConnectionStrings:PostgreSQL", "Host=127.0.0.1;Port=1;Database=unused;Username=unused;Password=unused");
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services => services.PostConfigure<ApiKeyOptions>(options =>
             {
