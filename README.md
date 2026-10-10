@@ -39,6 +39,10 @@ The script starts PostgreSQL, waits for its Compose health check, restores the l
 
 The default API address is `http://localhost:5070`. Use `.\scripts\start-local.ps1 -Port 5071` to select another port. API output is written to `artifacts/local/api-<port>.log` and `api-<port>.error.log`. Keep the terminal open; Ctrl+C stops the API while leaving PostgreSQL and its persistent data available. You can stop PostgreSQL separately with `docker compose stop postgres`.
 
+For a manual or IDE launch, run `.\scripts\start-local.ps1 -PrepareOnly` after setting the same keys. This runs the same PostgreSQL preparation, build, and migrations, then leaves `ConnectionStrings__PostgreSQL`, `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, and `ASPNETCORE_URLS` set in the current terminal without starting the API. Run `dotnet run --project .\src\Flagbit.Api --launch-profile http`, or launch a new IDE process from that terminal and select the API's `http` profile. An already-running IDE does not inherit the prepared environment. The API has no separate development connection-string fallback.
+
+Preparation-only mode intentionally retains those environment values; ordinary startup restores their previous values on exit or Ctrl+C. Use `-EnvFile <path>` for a separate PostgreSQL environment file. Both applications remain native .NET processes; Compose runs PostgreSQL only. See the [local workflow verification notes](docs/local-workflow-verification.md) for isolated startup, IDE configuration, restart checks, and the operating system and shell verified.
+
 In a second terminal, configure the CLI and try the management flow:
 
 ```powershell
@@ -75,9 +79,8 @@ For local development, set two different random secret values in PowerShell and 
 ```powershell
 $env:ApiKeys__ManagementKey = "<your-management-api-key>"
 $env:ApiKeys__EvaluationKey = "<your-evaluation-api-key>"
-dotnet tool restore
-dotnet ef database update --project .\src\Flagbit.Infrastructure --startup-project .\src\Flagbit.Api -- --environment Development
-dotnet run --project .\src\Flagbit.Api
+.\scripts\start-local.ps1 -PrepareOnly
+dotnet run --project .\src\Flagbit.Api --launch-profile http
 ```
 
 In a second terminal, set `FLAGBIT_API_KEY` to the same management or evaluation key configured for the running API:
