@@ -155,3 +155,5 @@ The base address follows normal `HttpClient` relative-URI resolution. To retain 
 | Empty, malformed, or incomplete evaluation response | Throws `JsonException`; a nonblank `key` and boolean `isEnabled` are required |
 | Caller cancellation | Throws `OperationCanceledException` or its derived type |
 | `HttpClient` timeout | Surfaces cancellation with a timeout cause; the caller's token is not cancelled |
+
+The [SDK utility audit](docs/sdk-utility-audit.md) records why this surface remains small and why additional aliases, callback helpers, and multi-flag methods were rejected.
