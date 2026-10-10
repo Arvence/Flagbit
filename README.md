@@ -51,7 +51,13 @@ dotnet run --project .\src\Flagbit.Cli -- evaluate local-checkout --user user-12
 dotnet run --project .\src\Flagbit.Cli -- delete local-checkout
 ```
 
-The CLI supports repeated `--attribute key=value` options. Configure advanced flag settings through the [HTTP API guide](docs/http-api.md). Evaluation can also use an evaluation key. The script reads API keys from the terminal environment; it does not load them from `.env`.
+The CLI supports `list`, `get`, `create`, `enable`, `disable`, `delete`, and `evaluate`. Configure advanced flag settings and manage application keys through the [HTTP API guide](docs/http-api.md). Evaluation can also use an evaluation key. The script reads API keys from the terminal environment; it does not load them from `.env`.
+
+Use each `--user` and `--environment` option at most once. Repeat `--attribute name=value` for distinct names; exact duplicates and names differing only by case are rejected. Attribute values may contain additional `=` characters, for example `--attribute token=a=b=c`. Keys, option values, and attribute names/values must not be blank. Values beginning with `--` are treated as missing option values. Nonblank identifiers and values retain their original spelling and whitespace; quote arguments containing spaces in your shell.
+
+`FLAGBIT_API_URL` defaults to `http://localhost:5070` when unset. It must be an absolute HTTP(S) URL without embedded credentials, a query, or a fragment; a path prefix is supported. Set `FLAGBIT_API_KEY` to a nonblank printable ASCII header value. Invalid configuration fails locally without printing its value. HTTP validation and conflict errors include available Problem Details; authentication failures explain which key is needed. Non-JSON error bodies fall back to the HTTP status, and malformed success bodies fail instead of reporting a disabled flag.
+
+Commands exit with `0` on success, `1` for invalid input, configuration, HTTP/connection errors, malformed responses, or a timeout, and `130` when cancelled with Ctrl+C. Requests use the standard `HttpClient` timeout of 100 seconds. Cancellation is forwarded to HTTP operations, including response reading; cancellation or timeout does not prove that a submitted write was rolled back. Check the flag state before repeating a write.
 
 ## API keys
 
