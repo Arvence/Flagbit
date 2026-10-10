@@ -30,15 +30,38 @@ public sealed class FlagbitClient
             path += $"?userId={Uri.EscapeDataString(userId)}";
         }
 
-        using var response = await _httpClient.GetAsync(path, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        return await SendEvaluationAsync(request, cancellationToken);
+    }
 
-        var evaluation = await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>(cancellationToken);
-        return evaluation?.IsEnabled ?? throw new JsonException("The Flagbit API returned an invalid evaluation response.");
+    public async Task<bool> EvaluateAsync(string key, FeatureFlagEvaluationContext context, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(context);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"api/flags/{Uri.EscapeDataString(key)}/evaluate")
+        {
+            Content = JsonContent.Create(context)
+        };
+        return await SendEvaluationAsync(request, cancellationToken);
     }
 
     public async Task<T> GetVariationAsync<T>(string key, T enabledVariation, T disabledVariation, string? userId = null, CancellationToken cancellationToken = default)
     {
         return await IsEnabledAsync(key, userId, cancellationToken) ? enabledVariation : disabledVariation;
+    }
+
+    public async Task<T> GetContextualVariationAsync<T>(string key, T enabledVariation, T disabledVariation, FeatureFlagEvaluationContext context, CancellationToken cancellationToken = default)
+    {
+        return await EvaluateAsync(key, context, cancellationToken) ? enabledVariation : disabledVariation;
+    }
+
+    private async Task<bool> SendEvaluationAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var evaluation = await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>(cancellationToken);
+        return evaluation?.IsEnabled ?? throw new JsonException("The Flagbit API returned an invalid evaluation response.");
     }
 }
