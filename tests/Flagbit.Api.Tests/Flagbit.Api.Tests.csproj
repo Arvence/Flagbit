@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Flagbit.Api\Flagbit.Api.csproj" />
     <ProjectReference Include="..\..\src\Flagbit.Sdk\Flagbit.Sdk.csproj" />
+    <ProjectReference Include="..\..\samples\Flagbit.SampleApi\Flagbit.SampleApi.csproj" Aliases="FlagbitSample" />
   </ItemGroup>
 
 </Project>
