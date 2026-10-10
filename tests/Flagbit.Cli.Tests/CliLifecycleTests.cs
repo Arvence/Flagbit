@@ -128,6 +128,56 @@ public sealed class CliLifecycleTests : IAsyncLifetime
         await AssertFailedCommandAsync(evaluationCli, "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.", "evaluate", "protected-flag");
     }
 
+    [Fact]
+    public async Task ExecutableRunsManagementAndEvaluationAgainstTheRealApi()
+    {
+        using var api = CreateApi();
+        api.UseKestrel(0);
+        using var httpClient = api.CreateClient();
+        var url = httpClient.BaseAddress!.AbsoluteUri;
+        const string key = "CLI checkout?plan=pro#%\u00e9";
+
+        await AssertExecutableAsync("No feature flags found.", "list");
+        await AssertExecutableAsync($"Created {key} (disabled).", "create", key);
+        await AssertExecutableAsync($"{key} disabled", "list");
+        await AssertExecutableAsync($"{key} is enabled.", "enable", key);
+        await AssertExecutableAsync($"{key} is enabled.", "get", key);
+        await AssertExecutableAsync($"{key} is enabled.", "evaluate", key, "--attribute", "token=a=b", "--attribute", "region=eu");
+
+        var conflict = await CliExecutableTests.RunAsync(url, "test-management-key", "create", key);
+        Assert.Equal(1, conflict.ExitCode);
+        Assert.Contains("409 Conflict", conflict.Error);
+        Assert.Contains("already exists", conflict.Error);
+        Assert.Contains(key, conflict.Error);
+        Assert.Empty(conflict.Output);
+
+        var denied = await CliExecutableTests.RunAsync(url, "test-evaluation-key", "disable", key);
+        Assert.Equal(1, denied.ExitCode);
+        Assert.Equal("API access denied. This command requires a management API key.", denied.Error.Trim());
+
+        var unauthenticated = await CliExecutableTests.RunAsync(url, null, "list");
+        Assert.Equal(1, unauthenticated.ExitCode);
+        Assert.Equal("API authentication failed. Set FLAGBIT_API_KEY to a valid API key.", unauthenticated.Error.Trim());
+
+        var invalid = await CliExecutableTests.RunAsync(url, "test-management-key", "create", ".");
+        Assert.Equal(1, invalid.ExitCode);
+        Assert.Contains("400 BadRequest", invalid.Error);
+        Assert.Contains("key:", invalid.Error);
+
+        await AssertExecutableAsync($"{key} is disabled.", "disable", key);
+        await AssertExecutableAsync($"{key} is disabled.", "evaluate", key);
+        await AssertExecutableAsync($"Deleted {key}.", "delete", key);
+        await AssertExecutableAsync("No feature flags found.", "list");
+
+        async Task AssertExecutableAsync(string expected, params string[] args)
+        {
+            var result = await CliExecutableTests.RunAsync(url, "test-management-key", args);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(expected, result.Output.Trim());
+            Assert.Empty(result.Error);
+        }
+    }
+
     private WebApplicationFactory<Program> CreateApi()
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
