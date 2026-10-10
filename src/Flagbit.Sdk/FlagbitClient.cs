@@ -59,6 +59,7 @@ public sealed class FlagbitClient
 
     private async Task<bool> SendEvaluationAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
