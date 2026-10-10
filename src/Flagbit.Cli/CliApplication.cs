@@ -21,7 +21,7 @@ internal sealed class CliApplication
     private TextWriter Output => _output ?? Console.Out;
     private TextWriter Error => _error ?? Console.Error;
 
-    public async Task<int> RunAsync(string[] args)
+    public async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
     {
         if (args.Length == 0)
         {
@@ -31,6 +31,7 @@ internal sealed class CliApplication
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var command = args[0].ToLowerInvariant();
 
             if (args.Length > 1 && string.IsNullOrWhiteSpace(args[1]))
@@ -40,15 +41,26 @@ internal sealed class CliApplication
 
             return command switch
             {
-                "list" when args.Length == 1 => await ListAsync(),
-                "get" when args.Length == 2 => await GetAsync(args[1]),
-                "create" when args.Length == 2 => await CreateAsync(args[1]),
-                "enable" when args.Length == 2 => await ChangeStateAsync(args[1], true),
-                "disable" when args.Length == 2 => await ChangeStateAsync(args[1], false),
-                "delete" when args.Length == 2 => await DeleteAsync(args[1]),
-                "evaluate" when args.Length >= 2 => await EvaluateAsync(args),
+                "list" when args.Length == 1 => await ListAsync(cancellationToken),
+                "get" when args.Length == 2 => await GetAsync(args[1], cancellationToken),
+                "create" when args.Length == 2 => await CreateAsync(args[1], cancellationToken),
+                "enable" when args.Length == 2 => await ChangeStateAsync(args[1], true, cancellationToken),
+                "disable" when args.Length == 2 => await ChangeStateAsync(args[1], false, cancellationToken),
+                "delete" when args.Length == 2 => await DeleteAsync(args[1], cancellationToken),
+                "evaluate" when args.Length >= 2 => await EvaluateAsync(args, cancellationToken),
                 _ => InvalidCommand("Unknown command or incorrect arguments.")
             };
+        }
+        catch (OperationCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Error.WriteLine("Command cancelled.");
+                return 130;
+            }
+
+            Error.WriteLine("The Flagbit API request timed out.");
+            return 1;
         }
         catch (HttpRequestException exception) when (exception.StatusCode is not null)
         {
@@ -78,16 +90,16 @@ internal sealed class CliApplication
         }
     }
 
-    private async Task<int> GetAsync(string key)
+    private async Task<int> GetAsync(string key, CancellationToken cancellationToken)
     {
-        var flag = await _apiClient.GetByKeyAsync(key);
+        var flag = await _apiClient.GetByKeyAsync(key, cancellationToken);
         Output.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
         return 0;
     }
 
-    private async Task<int> ListAsync()
+    private async Task<int> ListAsync(CancellationToken cancellationToken)
     {
-        var flags = await _apiClient.GetAllAsync();
+        var flags = await _apiClient.GetAllAsync(cancellationToken);
 
         if (flags.Count == 0)
         {
@@ -103,35 +115,35 @@ internal sealed class CliApplication
         return 0;
     }
 
-    private async Task<int> CreateAsync(string key)
+    private async Task<int> CreateAsync(string key, CancellationToken cancellationToken)
     {
-        var flag = await _apiClient.CreateAsync(key);
+        var flag = await _apiClient.CreateAsync(key, cancellationToken);
         Output.WriteLine($"Created {flag.Key} ({FormatState(flag.IsEnabled)}).");
         return 0;
     }
 
-    private async Task<int> ChangeStateAsync(string key, bool isEnabled)
+    private async Task<int> ChangeStateAsync(string key, bool isEnabled, CancellationToken cancellationToken)
     {
-        var flag = await _apiClient.SetEnabledAsync(key, isEnabled);
+        var flag = await _apiClient.SetEnabledAsync(key, isEnabled, cancellationToken);
         Output.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
         return 0;
     }
 
-    private async Task<int> DeleteAsync(string key)
+    private async Task<int> DeleteAsync(string key, CancellationToken cancellationToken)
     {
-        await _apiClient.DeleteAsync(key);
+        await _apiClient.DeleteAsync(key, cancellationToken);
         Output.WriteLine($"Deleted {key}.");
         return 0;
     }
 
-    private async Task<int> EvaluateAsync(string[] args)
+    private async Task<int> EvaluateAsync(string[] args, CancellationToken cancellationToken)
     {
         if (!TryParseEvaluationRequest(args, out var request, out var error))
         {
             return InvalidCommand(error);
         }
 
-        var result = await _apiClient.EvaluateAsync(args[1], request);
+        var result = await _apiClient.EvaluateAsync(args[1], request, cancellationToken);
         Output.WriteLine($"{result.Key} is {FormatState(result.IsEnabled)}.");
         return 0;
     }

@@ -27,10 +27,10 @@ internal sealed class FlagbitApiClient
         }
     }
 
-    public async Task<IReadOnlyCollection<FeatureFlagResponse>> GetAllAsync()
+    public async Task<IReadOnlyCollection<FeatureFlagResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(HttpMethod.Get, "api/flags", null);
-        var flags = await ReadAsync<FeatureFlagResponse[]>(response);
+        using var response = await SendAsync(HttpMethod.Get, "api/flags", null, cancellationToken);
+        var flags = await ReadAsync<FeatureFlagResponse[]>(response, cancellationToken);
         foreach (var flag in flags)
         {
             ValidateFlag(flag);
@@ -39,54 +39,55 @@ internal sealed class FlagbitApiClient
         return flags;
     }
 
-    public async Task<FeatureFlagResponse> GetByKeyAsync(string key)
+    public async Task<FeatureFlagResponse> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(HttpMethod.Get, $"api/flags/{Uri.EscapeDataString(key)}", null);
-        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response));
+        using var response = await SendAsync(HttpMethod.Get, $"api/flags/{Uri.EscapeDataString(key)}", null, cancellationToken);
+        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response, cancellationToken));
     }
 
-    public async Task<FeatureFlagResponse> CreateAsync(string key)
+    public async Task<FeatureFlagResponse> CreateAsync(string key, CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(HttpMethod.Post, "api/flags", JsonContent.Create(new CreateFeatureFlagRequest(key)));
-        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response));
+        using var response = await SendAsync(HttpMethod.Post, "api/flags", JsonContent.Create(new CreateFeatureFlagRequest(key)), cancellationToken);
+        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response, cancellationToken));
     }
 
-    public async Task<FeatureFlagResponse> SetEnabledAsync(string key, bool isEnabled)
+    public async Task<FeatureFlagResponse> SetEnabledAsync(string key, bool isEnabled, CancellationToken cancellationToken = default)
     {
         var action = isEnabled ? "enable" : "disable";
-        using var response = await SendAsync(HttpMethod.Put, $"api/flags/{Uri.EscapeDataString(key)}/{action}", null);
-        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response));
+        using var response = await SendAsync(HttpMethod.Put, $"api/flags/{Uri.EscapeDataString(key)}/{action}", null, cancellationToken);
+        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response, cancellationToken));
     }
 
-    public async Task DeleteAsync(string key)
+    public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(HttpMethod.Delete, $"api/flags/{Uri.EscapeDataString(key)}", null);
-        await EnsureSuccessAsync(response);
+        using var response = await SendAsync(HttpMethod.Delete, $"api/flags/{Uri.EscapeDataString(key)}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
     }
 
-    public async Task<FeatureFlagResponse> EvaluateAsync(string key, EvaluateFeatureFlagRequest request)
+    public async Task<FeatureFlagResponse> EvaluateAsync(string key, EvaluateFeatureFlagRequest request, CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(HttpMethod.Post, $"api/flags/{Uri.EscapeDataString(key)}/evaluate", JsonContent.Create(request));
-        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response));
+        using var response = await SendAsync(HttpMethod.Post, $"api/flags/{Uri.EscapeDataString(key)}/evaluate", JsonContent.Create(request), cancellationToken);
+        return ValidateFlag(await ReadAsync<FeatureFlagResponse>(response, cancellationToken));
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content)
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path) { Content = content };
-        return await _httpClient.SendAsync(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
-    private async Task<T> ReadAsync<T>(HttpResponseMessage response)
+    private async Task<T> ReadAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        await EnsureSuccessAsync(response);
-        return await ReadJsonAsync<T>(response.Content);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadJsonAsync<T>(response.Content, cancellationToken);
     }
 
-    private static async Task<T> ReadJsonAsync<T>(HttpContent content)
+    private static async Task<T> ReadJsonAsync<T>(HttpContent content, CancellationToken cancellationToken)
     {
         try
         {
-            return await content.ReadFromJsonAsync<T>() ?? throw new JsonException();
+            return await content.ReadFromJsonAsync<T>(cancellationToken) ?? throw new JsonException();
         }
         catch (InvalidOperationException exception) when (exception.InnerException is ArgumentException)
         {
@@ -104,8 +105,9 @@ internal sealed class FlagbitApiClient
         return flag;
     }
 
-    private async Task EnsureSuccessAsync(HttpResponseMessage response)
+    private async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (response.IsSuccessStatusCode)
         {
             return;
@@ -117,7 +119,7 @@ internal sealed class FlagbitApiClient
         {
             try
             {
-                using var problem = await ReadJsonAsync<JsonDocument>(response.Content);
+                using var problem = await ReadJsonAsync<JsonDocument>(response.Content, cancellationToken);
                 if (problem.RootElement.ValueKind == JsonValueKind.Object)
                 {
                     var messages = new List<string>();

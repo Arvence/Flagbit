@@ -26,5 +26,19 @@ catch (ArgumentException)
     return 1;
 }
 
-var application = new CliApplication(apiClient);
-return await application.RunAsync(args);
+using var cancellation = new CancellationTokenSource();
+ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+{
+    eventArgs.Cancel = true;
+    cancellation.Cancel();
+};
+Console.CancelKeyPress += cancelHandler;
+try
+{
+    var application = new CliApplication(apiClient);
+    return await application.RunAsync(args, cancellation.Token);
+}
+finally
+{
+    Console.CancelKeyPress -= cancelHandler;
+}
