@@ -114,3 +114,44 @@ Invoke-RestMethod -Method Delete -Uri "http://localhost:5070/api/keys/$($applica
 ```
 
 Revocation deletes the stored key. The next request using it returns `401`, including on other API instances sharing the database; other keys continue to work. Generated keys persist across restarts and are checked in PostgreSQL on every request, without caching. The configured management and evaluation keys remain supported and are not included in the generated-key list.
+
+## .NET SDK
+
+Reference `src/Flagbit.Sdk/Flagbit.Sdk.csproj` from a .NET 10 application. The SDK has no dependency on the API, Core, or Infrastructure assemblies. Supply and manage the lifetime of an `HttpClient` with an absolute HTTP(S) base address and an evaluation API key. The SDK preserves its authentication headers and does not dispose it.
+
+```csharp
+using Flagbit.Sdk;
+
+using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5070/") };
+httpClient.DefaultRequestHeaders.Add("X-Api-Key", "<your-evaluation-api-key>");
+var flagbit = new FlagbitClient(httpClient);
+var cancellationToken = CancellationToken.None;
+
+var context = new FeatureFlagEvaluationContext(
+    UserId: "user-123",
+    Environment: "production",
+    Attributes: new Dictionary<string, string> { ["plan"] = "enterprise" });
+
+var enabled = await flagbit.EvaluateAsync("new-checkout", context, cancellationToken);
+var checkout = await flagbit.GetContextualVariationAsync("new-checkout", "modern", "classic", context, cancellationToken);
+
+var userOnly = await flagbit.IsEnabledAsync("new-checkout", "user-123", cancellationToken);
+var userOnlyCheckout = await flagbit.GetVariationAsync("new-checkout", "modern", "classic", "user-123", cancellationToken);
+```
+
+`IsEnabledAsync` and `GetVariationAsync<T>` retain the user-only GET endpoint and their existing signatures, including calls with a `null` user ID. `EvaluateAsync` and `GetContextualVariationAsync<T>` use POST with user, environment, and string attributes. Context cannot be null, but `new FeatureFlagEvaluationContext()` supplies empty context. Flag keys must be nonblank and are URL-escaped without trimming or renaming.
+
+Each method makes one HTTP request. The example makes four separate evaluations; in application code, choose the method whose result you need. Variation values remain in the caller and are selected from the server's boolean response. To reuse one decision for multiple local actions, evaluate once and use the returned value. Repeated SDK calls evaluate again and can observe different flag states.
+
+Context records support `with` expressions for changes such as `context with { Environment = "staging" }`. Their attribute dictionaries remain caller-owned: `IReadOnlyDictionary` does not make an underlying mutable dictionary immutable, and a `with` copy shares attributes unless replaced. Do not mutate shared attributes while a request is being serialized. Applications that require immutable attributes can supply their own immutable or frozen dictionary without an SDK builder.
+
+The base address follows normal `HttpClient` relative-URI resolution. To retain a hosted path prefix, include its trailing slash, for example `https://flags.example/service/`. Configure request timeout on the supplied `HttpClient`; cancellation and timeout cover sending and receiving the response. The SDK adds no retries, caching, or outage fallback.
+
+| Outcome | SDK behavior |
+| --- | --- |
+| Valid enabled/disabled response, including a missing flag | Returns the API's boolean or selects the caller's corresponding variation |
+| HTTP failure, including `401` after key revocation | Throws `HttpRequestException` with the HTTP status |
+| Network failure | Propagates the transport exception; it does not become `false` |
+| Empty, malformed, or incomplete evaluation response | Throws `JsonException`; a nonblank `key` and boolean `isEnabled` are required |
+| Caller cancellation | Throws `OperationCanceledException` or its derived type |
+| `HttpClient` timeout | Surfaces cancellation with a timeout cause; the caller's token is not cancelled |
