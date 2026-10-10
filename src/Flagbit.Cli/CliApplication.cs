@@ -58,6 +58,11 @@ internal sealed class CliApplication
                 HttpStatusCode.Forbidden => "API access denied. This command requires a management API key.",
                 _ => $"API request failed: {(int)exception.StatusCode.Value} {exception.StatusCode.Value}."
             };
+            if (exception is ApiRequestException { Details: { Length: > 0 } details })
+            {
+                message += $" {details}";
+            }
+
             Error.WriteLine(message);
             return 1;
         }

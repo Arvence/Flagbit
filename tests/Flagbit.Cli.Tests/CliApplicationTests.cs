@@ -93,4 +93,65 @@ public sealed class CliApplicationTests
         Assert.Equal(expected, cli.Output.ToString().Replace("\r\n", "\n").Trim());
         Assert.Empty(cli.Error.ToString());
     }
+
+    [Theory]
+    [InlineData(401, "API authentication failed. Set FLAGBIT_API_KEY to a valid API key.")]
+    [InlineData(403, "API access denied. This command requires a management API key.")]
+    public async Task AuthenticationErrorsRemainActionable(int status, string expected)
+    {
+        using var cli = new CliTestSession((_, _) => Task.FromResult(CliTestSession.Response("{\"detail\":\"private-secret\"}", (HttpStatusCode)status, "application/problem+json")));
+
+        Assert.Equal(1, await cli.Application.RunAsync(["list"]));
+        Assert.Equal(expected, cli.Error.ToString().Trim());
+        Assert.Empty(cli.Output.ToString());
+    }
+
+    [Theory]
+    [InlineData(400, "{\"title\":\"Validation failed.\",\"errors\":{\"key\":[\"Key is required.\"]}}", "API request failed: 400 BadRequest. Validation failed. key: Key is required.")]
+    [InlineData(409, "{\"title\":\"Conflict\",\"detail\":\"Flag already exists.\"}", "API request failed: 409 Conflict. Flag already exists.")]
+    [InlineData(404, "{\"detail\":\"Flag was not found.\"}", "API request failed: 404 NotFound. Flag was not found.")]
+    public async Task ProblemDetailsIncludeUsefulMessages(int status, string body, string expected)
+    {
+        using var cli = new CliTestSession((_, _) => Task.FromResult(CliTestSession.Response(body, (HttpStatusCode)status, "application/problem+json")));
+
+        Assert.Equal(1, await cli.Application.RunAsync(["delete", "flag"]));
+        Assert.Equal(expected, cli.Error.ToString().Trim());
+        Assert.Empty(cli.Output.ToString());
+    }
+
+    [Theory]
+    [InlineData(409, "<html>private-secret</html>", "text/html", "Conflict")]
+    [InlineData(400, "{broken", "application/problem+json", "BadRequest")]
+    [InlineData(400, "null", "application/problem+json", "BadRequest")]
+    [InlineData(400, "[]", "application/problem+json", "BadRequest")]
+    [InlineData(400, "{\"errors\":{\"key\":123},\"detail\":false}", "application/problem+json", "BadRequest")]
+    [InlineData(500, "{\"detail\":\"private-secret\"}", "application/problem+json", "InternalServerError")]
+    public async Task UnusableOrServerErrorBodiesFallBackToStatus(int status, string body, string mediaType, string name)
+    {
+        using var cli = new CliTestSession((_, _) => Task.FromResult(CliTestSession.Response(body, (HttpStatusCode)status, mediaType)));
+
+        Assert.Equal(1, await cli.Application.RunAsync(["get", "flag"]));
+        Assert.Equal($"API request failed: {status} {name}.", cli.Error.ToString().Trim());
+        Assert.Empty(cli.Output.ToString());
+    }
+
+    [Fact]
+    public async Task ProblemDetailsRedactTheConfiguredKeyAndRemoveControlCharacters()
+    {
+        using var cli = new CliTestSession((_, _) => Task.FromResult(CliTestSession.Response("{\"detail\":\"private-secret\\r\\n\\u001b[31mconflict\"}", HttpStatusCode.Conflict)), "private-secret");
+
+        Assert.Equal(1, await cli.Application.RunAsync(["create", "flag"]));
+        Assert.Equal("API request failed: 409 Conflict. [redacted]   [31mconflict", cli.Error.ToString().Trim());
+        Assert.Empty(cli.Output.ToString());
+    }
+
+    [Fact]
+    public async Task ConnectionFailuresDoNotLeakExceptionDetails()
+    {
+        using var cli = new CliTestSession((_, _) => throw new HttpRequestException("private-secret"));
+
+        Assert.Equal(1, await cli.Application.RunAsync(["list"]));
+        Assert.Equal("Could not connect to the Flagbit API.", cli.Error.ToString().Trim());
+        Assert.Empty(cli.Output.ToString());
+    }
 }
