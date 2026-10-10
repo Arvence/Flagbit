@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Flagbit.Api\Flagbit.Api.csproj" />
+    <ProjectReference Include="..\..\src\Flagbit.Sdk\Flagbit.Sdk.csproj" />
   </ItemGroup>
 
 </Project>
