@@ -40,6 +40,16 @@ public sealed class CliExecutableTests
     }
 
     [Fact]
+    public async Task MissingArgumentsFailWithoutAnApiConnection()
+    {
+        var result = await RunAsync("http://127.0.0.1:1", null, "get");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("Unknown command or incorrect arguments.", result.Error.Trim());
+        Assert.Contains("Usage:", result.Output);
+    }
+
+    [Fact]
     public async Task ConnectionFailureProducesAControlledExitCode()
     {
         var result = await RunAsync("http://127.0.0.1:1", null, "list");

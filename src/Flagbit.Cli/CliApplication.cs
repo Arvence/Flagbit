@@ -7,13 +7,19 @@ namespace Flagbit.Cli;
 internal sealed class CliApplication
 {
     private readonly FlagbitApiClient _apiClient;
+    private readonly TextWriter? _output;
+    private readonly TextWriter? _error;
 
-    public CliApplication(FlagbitApiClient apiClient)
+    public CliApplication(FlagbitApiClient apiClient, TextWriter? output = null, TextWriter? error = null)
     {
         ArgumentNullException.ThrowIfNull(apiClient);
-
         _apiClient = apiClient;
+        _output = output;
+        _error = error;
     }
+
+    private TextWriter Output => _output ?? Console.Out;
+    private TextWriter Error => _error ?? Console.Error;
 
     public async Task<int> RunAsync(string[] args)
     {
@@ -27,6 +33,11 @@ internal sealed class CliApplication
         {
             var command = args[0].ToLowerInvariant();
 
+            if (args.Length > 1 && string.IsNullOrWhiteSpace(args[1]))
+            {
+                return InvalidCommand("Flag key must not be blank.");
+            }
+
             return command switch
             {
                 "list" when args.Length == 1 => await ListAsync(),
@@ -36,7 +47,7 @@ internal sealed class CliApplication
                 "disable" when args.Length == 2 => await ChangeStateAsync(args[1], false),
                 "delete" when args.Length == 2 => await DeleteAsync(args[1]),
                 "evaluate" when args.Length >= 2 => await EvaluateAsync(args),
-                _ => InvalidCommand()
+                _ => InvalidCommand("Unknown command or incorrect arguments.")
             };
         }
         catch (HttpRequestException exception) when (exception.StatusCode is not null)
@@ -47,17 +58,17 @@ internal sealed class CliApplication
                 HttpStatusCode.Forbidden => "API access denied. This command requires a management API key.",
                 _ => $"API request failed: {(int)exception.StatusCode.Value} {exception.StatusCode.Value}."
             };
-            Console.Error.WriteLine(message);
+            Error.WriteLine(message);
             return 1;
         }
         catch (HttpRequestException)
         {
-            Console.Error.WriteLine("Could not connect to the Flagbit API.");
+            Error.WriteLine("Could not connect to the Flagbit API.");
             return 1;
         }
         catch (JsonException)
         {
-            Console.Error.WriteLine("The Flagbit API returned an invalid response.");
+            Error.WriteLine("The Flagbit API returned an invalid response.");
             return 1;
         }
     }
@@ -65,7 +76,7 @@ internal sealed class CliApplication
     private async Task<int> GetAsync(string key)
     {
         var flag = await _apiClient.GetByKeyAsync(key);
-        Console.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
+        Output.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
         return 0;
     }
 
@@ -75,13 +86,13 @@ internal sealed class CliApplication
 
         if (flags.Count == 0)
         {
-            Console.WriteLine("No feature flags found.");
+            Output.WriteLine("No feature flags found.");
             return 0;
         }
 
         foreach (var flag in flags.OrderBy(flag => flag.Key, StringComparer.OrdinalIgnoreCase))
         {
-            Console.WriteLine($"{flag.Key} {FormatState(flag.IsEnabled)}");
+            Output.WriteLine($"{flag.Key} {FormatState(flag.IsEnabled)}");
         }
 
         return 0;
@@ -90,47 +101,48 @@ internal sealed class CliApplication
     private async Task<int> CreateAsync(string key)
     {
         var flag = await _apiClient.CreateAsync(key);
-        Console.WriteLine($"Created {flag.Key} ({FormatState(flag.IsEnabled)}).");
+        Output.WriteLine($"Created {flag.Key} ({FormatState(flag.IsEnabled)}).");
         return 0;
     }
 
     private async Task<int> ChangeStateAsync(string key, bool isEnabled)
     {
         var flag = await _apiClient.SetEnabledAsync(key, isEnabled);
-        Console.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
+        Output.WriteLine($"{flag.Key} is {FormatState(flag.IsEnabled)}.");
         return 0;
     }
 
     private async Task<int> DeleteAsync(string key)
     {
         await _apiClient.DeleteAsync(key);
-        Console.WriteLine($"Deleted {key}.");
+        Output.WriteLine($"Deleted {key}.");
         return 0;
     }
 
     private async Task<int> EvaluateAsync(string[] args)
     {
-        if (!TryParseEvaluationRequest(args, out var request))
+        if (!TryParseEvaluationRequest(args, out var request, out var error))
         {
-            return InvalidCommand();
+            return InvalidCommand(error);
         }
 
         var result = await _apiClient.EvaluateAsync(args[1], request);
-        Console.WriteLine($"{result.Key} is {FormatState(result.IsEnabled)}.");
+        Output.WriteLine($"{result.Key} is {FormatState(result.IsEnabled)}.");
         return 0;
     }
 
-    private static bool TryParseEvaluationRequest(string[] args, out EvaluateFeatureFlagRequest request)
+    private static bool TryParseEvaluationRequest(string[] args, out EvaluateFeatureFlagRequest request, out string error)
     {
         string? userId = null;
         string? environment = null;
         var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        request = new EvaluateFeatureFlagRequest();
+        error = "Each evaluation option requires a nonblank value.";
 
         for (var index = 2; index < args.Length; index += 2)
         {
-            if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
+            if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]) || args[index + 1].StartsWith("--", StringComparison.Ordinal))
             {
-                request = new EvaluateFeatureFlagRequest();
                 return false;
             }
 
@@ -140,23 +152,40 @@ internal sealed class CliApplication
             switch (option)
             {
                 case "--user":
+                    if (userId is not null)
+                    {
+                        error = "Option '--user' may only be specified once.";
+                        return false;
+                    }
+
                     userId = value;
                     break;
                 case "--environment":
+                    if (environment is not null)
+                    {
+                        error = "Option '--environment' may only be specified once.";
+                        return false;
+                    }
+
                     environment = value;
                     break;
                 case "--attribute":
                     var separatorIndex = value.IndexOf('=');
-                    if (separatorIndex <= 0 || separatorIndex == value.Length - 1)
+                    if (separatorIndex <= 0 || string.IsNullOrWhiteSpace(value[..separatorIndex]) || string.IsNullOrWhiteSpace(value[(separatorIndex + 1)..]))
                     {
-                        request = new EvaluateFeatureFlagRequest();
+                        error = "Attributes require a nonblank name and value: --attribute name=value.";
                         return false;
                     }
 
-                    attributes[value[..separatorIndex]] = value[(separatorIndex + 1)..];
+                    if (!attributes.TryAdd(value[..separatorIndex], value[(separatorIndex + 1)..]))
+                    {
+                        error = "Attribute names must be unique (case-insensitive).";
+                        return false;
+                    }
+
                     break;
                 default:
-                    request = new EvaluateFeatureFlagRequest();
+                    error = "Unknown evaluation option.";
                     return false;
             }
         }
@@ -165,9 +194,9 @@ internal sealed class CliApplication
         return true;
     }
 
-    private static int InvalidCommand()
+    private int InvalidCommand(string message)
     {
-        Console.Error.WriteLine("Unknown command or missing argument.");
+        Error.WriteLine(message);
         PrintUsage();
         return 1;
     }
@@ -177,15 +206,15 @@ internal sealed class CliApplication
         return isEnabled ? "enabled" : "disabled";
     }
 
-    private static void PrintUsage()
+    private void PrintUsage()
     {
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  flagbit list");
-        Console.WriteLine("  flagbit get <key>");
-        Console.WriteLine("  flagbit create <key>");
-        Console.WriteLine("  flagbit enable <key>");
-        Console.WriteLine("  flagbit disable <key>");
-        Console.WriteLine("  flagbit delete <key>");
-        Console.WriteLine("  flagbit evaluate <key> [--user <id>] [--environment <name>] [--attribute <key=value>]");
+        Output.WriteLine("Usage:");
+        Output.WriteLine("  flagbit list");
+        Output.WriteLine("  flagbit get <key>");
+        Output.WriteLine("  flagbit create <key>");
+        Output.WriteLine("  flagbit enable <key>");
+        Output.WriteLine("  flagbit disable <key>");
+        Output.WriteLine("  flagbit delete <key>");
+        Output.WriteLine("  flagbit evaluate <key> [--user <id>] [--environment <name>] [--attribute <key=value>]");
     }
 }
