@@ -11,9 +11,14 @@ internal sealed class FlagbitApiClient
     {
         ArgumentNullException.ThrowIfNull(httpClient);
 
+        if (apiKey is not null && (string.IsNullOrWhiteSpace(apiKey) || apiKey.Any(character => character < ' ' || character > '~')))
+        {
+            throw new ArgumentException("The API key must be a nonblank printable ASCII header value.", nameof(apiKey));
+        }
+
         _httpClient = httpClient;
 
-        if (!string.IsNullOrWhiteSpace(apiKey))
+        if (apiKey is not null)
         {
             _httpClient.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
         }
