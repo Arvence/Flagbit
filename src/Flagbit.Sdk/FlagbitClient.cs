@@ -11,9 +11,10 @@ public sealed class FlagbitClient
     {
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        if (httpClient.BaseAddress is null)
+        if (httpClient.BaseAddress is not { IsAbsoluteUri: true } baseAddress
+            || (baseAddress.Scheme != Uri.UriSchemeHttp && baseAddress.Scheme != Uri.UriSchemeHttps))
         {
-            throw new ArgumentException("The HTTP client must have a base address.", nameof(httpClient));
+            throw new ArgumentException("The HTTP client must have an absolute HTTP or HTTPS base address.", nameof(httpClient));
         }
 
         _httpClient = httpClient;
@@ -62,6 +63,11 @@ public sealed class FlagbitClient
         response.EnsureSuccessStatusCode();
 
         var evaluation = await response.Content.ReadFromJsonAsync<FeatureFlagEvaluationResponse>(cancellationToken);
-        return evaluation?.IsEnabled ?? throw new JsonException("The Flagbit API returned an invalid evaluation response.");
+        if (evaluation is null || string.IsNullOrWhiteSpace(evaluation.Key) || evaluation.IsEnabled is null)
+        {
+            throw new JsonException("The Flagbit API returned an invalid evaluation response.");
+        }
+
+        return evaluation.IsEnabled.Value;
     }
 }
