@@ -1,6 +1,6 @@
 # Local workflow verification
 
-TODO 7 verification notes, recorded on October 10, 2026. These commands and observed results are input for the final documentation pass.
+TODO 7 verification notes, recorded on October 10, 2026, with interactive IDE verification completed on October 11, 2026. These commands and observed results are input for the final documentation pass.
 
 ## Verified environment
 
@@ -9,7 +9,7 @@ TODO 7 verification notes, recorded on October 10, 2026. These commands and obse
 - API, CLI, and SampleApi ran as native .NET applications. Only PostgreSQL ran in Docker.
 - The verification used a separate Compose project, container, volume, database, and ports. The normal `.env`, PostgreSQL container, and persistent volume were not changed.
 
-PowerShell 7, Linux, macOS, and an interactive IDE debugger session were not exercised. Both existing `http` launch profiles were executed with `dotnet run`; the IDE procedure below uses the same environment and profiles.
+PowerShell 7, Linux, and macOS were not exercised. Both existing `http` launch profiles were executed with `dotnet run`. Both applications were also launched and inspected at source breakpoints in Visual Studio Code with the C# debugger.
 
 ## Isolated database and startup
 
@@ -65,6 +65,20 @@ Preparation-only mode starts/waits for PostgreSQL, builds, and applies migration
 For standard IDE ports, use `-PrepareOnly` without `-Port`, set `Flagbit__ApiUrl` to `http://localhost:5070`, and set `Flagbit__ApiKey` to an evaluation key. Launch a **new IDE process from that prepared terminal**, open `Flagbit.sln`, and select the API and SampleApi projects with their existing `http` profiles. Those profiles bind to 5070 and 5131. An IDE process already running before preparation will not inherit the new environment. With custom ports, supply the corresponding `--urls` application arguments and sample API URL explicitly.
 
 The checked-in API development configuration contains logging settings, with no separate database credentials. The preparation mode and ordinary startup share the same Compose resolution and migration logic.
+
+### Interactive IDE verification
+
+The remaining IDE check was completed in Visual Studio Code on October 11, 2026, using C# extension 2.160.4 and C# Dev Kit 3.40.210. The existing isolated database and ports above were reused. Preparation-only mode confirmed the database was healthy and migrations were current; Debug builds of the API and sample each completed with zero warnings and zero errors.
+
+The IDE was already running, so temporary local `coreclr` launch configurations supplied the exact prepared environment explicitly. They launched the Debug `net10.0` DLLs with each application's project directory as its working directory and the existing verification ports. The API received the resolved connection string and API keys; the sample received the API URL and an evaluation key. No application code or checked-in launch profile needed changing.
+
+1. Launch the API from Run and Debug. `/health` returned `200` against the isolated PostgreSQL database.
+2. Set a breakpoint in `src/Flagbit.Api/FeatureFlagEndpoints.cs` at the `FeatureFlagContext` construction in `EvaluateAsync`. Send the contextual HTTP evaluation request shown below. The debugger paused at the breakpoint and exposed `sample-new-checkout`, `demo-user`, and `production`. Step Over constructed the expected context; Continue completed the request with `isEnabled: true`.
+3. Clear the API breakpoint and launch SampleApi as a second debug session. Set a breakpoint in `samples/Flagbit.SampleApi/Program.cs` at the successful `Results.Ok` return after SDK evaluation.
+4. Send `/checkout?userId=demo-user&environment=production&plan=enterprise`. The sample paused with `userId = demo-user`, `environment = production`, `plan = enterprise`, one attribute, and `isEnabled = true`. Continue completed the request with `checkout: modern`.
+5. Clear the sample breakpoint and stop both sessions through the IDE. Both application process IDs exited. The temporary launch configurations and environment exports were removed. The sample flag remained enabled in PostgreSQL; only the isolated container was stopped, with its volume retained.
+
+This closes the interactive IDE verification gap from the initial report. The temporary configurations and credentials are not part of the repository.
 
 ## CLI and sample integration
 
@@ -178,4 +192,4 @@ The Release build completed with zero warnings and zero errors. The final soluti
 
 Compose remains PostgreSQL-only. Existing launch profiles, migrations, database schema, SDK contracts, and evaluation semantics are unchanged. The sample still uses an evaluation key and makes one network evaluation per request. Normal development data was preserved, and the isolated verification container was stopped with its volume retained.
 
-The final documentation TODO should consolidate these commands and observed results. Interactive IDE breakpoint verification and checks on other operating systems or shells remain unperformed; launching both existing profiles through `dotnet run` does not establish those results.
+The final documentation TODO should consolidate these commands and observed results. Interactive IDE breakpoint verification is complete. Checks on other operating systems or shells remain unperformed; the supported environment actually exercised is Windows 11 with Windows PowerShell 5.1.
