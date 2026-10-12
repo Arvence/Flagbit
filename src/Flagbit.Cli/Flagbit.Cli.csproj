@@ -10,10 +10,12 @@
     <ToolCommandName>flagbit</ToolCommandName>
     <AssemblyName>flagbit</AssemblyName>
     <RootNamespace>Flagbit.Cli</RootNamespace>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Flagbit.Cli.Tests" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
