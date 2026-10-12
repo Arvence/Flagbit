@@ -81,7 +81,7 @@ try {
     }
 
     $connection = New-Object System.Data.Common.DbConnectionStringBuilder
-    $connection['Host'] = 'localhost'
+    $connection['Host'] = '127.0.0.1'
     $connection['Port'] = [string]$databasePort.published
     $connection['Database'] = [string]$postgres.environment.POSTGRES_DB
     $connection['Username'] = [string]$postgres.environment.POSTGRES_USER
