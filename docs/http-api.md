@@ -1,8 +1,12 @@
 # HTTP API
 
-Flagbit can be managed and evaluated through HTTP without the .NET SDK. The default local address is `http://localhost:5070`. PostgreSQL must be available and migrations applied before using flag endpoints. Configure and start the API as described in the [README](../README.md#api-keys).
+Flagbit can be managed and evaluated through HTTP without the .NET SDK. The default local address is `http://localhost:5070`. PostgreSQL must be available and migrations applied before using flag endpoints. Configure and start the API as described in the [README](../README.md#prerequisites-and-local-startup).
 
-Send `X-Api-Key` with every `/api/flags` and `/api/keys` request. Management keys can use all endpoints; configured evaluation keys and generated application keys can use only the two evaluation endpoints. `/health` and the Development-only `/openapi/v1.json` document do not require a key. `/health` checks database connectivity and returns `503` when PostgreSQL is unavailable. It does not verify or apply migrations: a reachable database without tables is healthy. Apply migrations explicitly before serving flag or application-key requests.
+## Health and migration preparation
+
+Send `X-Api-Key` with every `/api/flags` and `/api/keys` request. Management keys can use all endpoints; configured evaluation keys and generated application keys can use only the two evaluation endpoints. `/health` and the Development-only `/openapi/v1.json` document do not require a key.
+
+`GET /health` checks database connectivity and returns `503` when PostgreSQL is unavailable. It does not verify or apply migrations: a reachable database without tables is healthy. Run `scripts/start-local.ps1` or the EF Core migration command from the README before serving flag or application-key requests.
 
 ## Endpoints
 
@@ -82,7 +86,7 @@ Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/flags/http-demo-checkout" -H
 Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/flags/http-demo-accounts" -Headers $managementHeaders
 ```
 
-The repository also includes [HTTP editor requests](../src/Flagbit.Api/Flagbit.Api.http). OpenAPI is available only when the API runs in Development. It describes flag and application-key request/response schemas, error responses, and the `X-Api-Key` header security scheme on protected operations. Operation descriptions distinguish management access from evaluation access. The document can be generated without a database connection.
+The repository also includes [HTTP editor requests](../src/Flagbit.Api/Flagbit.Api.http). OpenAPI is available only when the API runs in Development. It describes flag and application-key request/response schemas, error responses, and the `X-Api-Key` header security scheme on protected operations. Operation descriptions distinguish management access from evaluation access. The document can be generated without a database connection. See the [README](../README.md#validation-and-continuous-integration) for the complete build, model-drift, and Testcontainers validation flow.
 
 ## Evaluation behavior
 

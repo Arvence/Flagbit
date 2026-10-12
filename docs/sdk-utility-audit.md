@@ -2,13 +2,13 @@
 
 ## Outcome
 
-The TODO 5 SDK already supports the useful consumer utilities: an evaluation context with optional named constructor arguments and caller-owned variation selection for both evaluation paths. No additional public utility is justified by TODO 5.5. This decision was recorded before any utility implementation; none was added.
+The SDK supports the useful consumer utilities: an evaluation context with optional named constructor arguments and caller-owned variation selection for both evaluation paths. No additional public utility is justified by the current consumer surface.
 
-The interrupted TODO 5 work was completed first, including cancellation during sending and response reading, pre-cancelled calls, HTTP timeouts, and integration with the real API using migrated PostgreSQL and generated-key revocation. The distinction matters: those changes complete the evaluation contract, rather than add consumer utilities.
+The evaluation contract includes cancellation during sending and response reading, pre-cancelled calls, HTTP timeouts, and integration with the real API using migrated PostgreSQL and generated-key revocation. Those behaviors are contract requirements rather than consumer-utility additions.
 
 ## Reviewed public surface
 
-The completed TODO 5 surface, retained unchanged by the utility audit, is:
+The public surface retained unchanged by this audit is:
 
 ```csharp
 new FlagbitClient(HttpClient httpClient)
@@ -58,8 +58,8 @@ The SDK tests cover both outcomes, complete context serialization, escaping, aut
 
 `SdkEvaluationTests` runs the SDK against a real Kestrel listener and the existing migrated PostgreSQL fixture. It verifies user targeting, rollout, environment and attribute restrictions, schedules, dependencies, current-state evaluation without caching, user-only GET/POST equivalence, caller-owned variations, generated-key permissions, and revocation across all SDK evaluation methods.
 
-Exact executed counts and build results are reported with the task completion. No utility-specific test is needed because no additional utility was introduced.
+Exact executed counts and build results are reported by the repository validation workflow. No utility-specific test is needed because no additional utility was introduced.
 
-CLI changes, SampleApi integration, broader documentation, and final end-to-end review remain in TODOs 6–9 according to their respective scopes. SampleApi should exercise the full context, demonstrate one evaluation per decision, and keep application behavior and error policy outside the SDK. The later documentation pass should preserve the explicit per-call network cost, context ownership, and failure distinctions documented here.
+The SampleApi exercises the full context and one evaluation per decision. Application behavior and error policy remain outside the SDK; the main documentation preserves the explicit per-call network cost, context ownership, and failure distinctions documented here.
 
 No server changes, migrations, batch endpoint, local evaluation, caching, retries, polling, streaming, telemetry, generated flag wrappers, callback framework, or registration framework were added.

@@ -2,15 +2,15 @@
 
 A small ASP.NET Core application that uses `Flagbit.Sdk` to switch between classic and modern checkout behavior without restarting the application. The sample returns JSON; it does not render a checkout page.
 
-Each request to `/checkout` asks the Flagbit API to evaluate `sample-new-checkout` through the SDK's contextual POST evaluation. An enabled result selects `modern`; a disabled or missing flag, or an unmet evaluation condition, selects `classic`. Optional `userId`, `environment`, and `plan` query parameters become the user, environment, and `plan` attribute in the evaluation context.
+Each request to `/checkout` asks the Flagbit API to evaluate `sample-new-checkout` through the SDK's contextual POST evaluation. An enabled result selects `modern`; a disabled or missing flag, or an unmet evaluation condition, selects `classic`. Optional `userId`, `environment`, and `plan` query parameters become the user, environment, and `plan` attribute in the evaluation context. A remote evaluation failure never becomes a classic checkout response: the sample returns `502` for unavailable, unauthorized, revoked, or malformed upstream responses and `504` for an upstream timeout.
 
 ## Prerequisites
 
 - .NET 10 SDK.
-- A running Flagbit API with PostgreSQL and current migrations. Follow the [main README](../../README.md) for API configuration and startup.
+- A running Flagbit API with PostgreSQL and current migrations. Follow the [main README](../../README.md#prerequisites-and-local-startup) for API configuration and startup.
 - The management API key configured for that API.
 
-Run all commands below in PowerShell from the repository root. Keep the Flagbit API running in its own terminal. The default addresses are `http://localhost:5070` for Flagbit and `http://localhost:5131` for this sample.
+Run all commands below in Windows PowerShell from the repository root. Keep the Flagbit API running in its own terminal. The default addresses are `http://localhost:5070` for Flagbit and `http://localhost:5131` for this sample. The API and sample are native .NET processes; Docker hosts PostgreSQL only.
 
 ## Create the flag
 

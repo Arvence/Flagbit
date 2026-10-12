@@ -2,6 +2,7 @@
 @flagKey = new-checkout
 @apiKeyId = 00000000-0000-0000-0000-000000000000
 
+# Set ApiKeys__ManagementKey and ApiKeys__EvaluationKey in the HTTP editor process.
 # Run the dependency and feature creation requests before evaluation.
 # Error responses and SDK-free PowerShell examples: ../../docs/http-api.md
 
@@ -9,7 +10,7 @@
 GET {{FlagbitApi_HostAddress}}/
 Accept: application/json
 
-### PostgreSQL readiness
+### PostgreSQL connectivity (this does not apply or verify migrations)
 GET {{FlagbitApi_HostAddress}}/health
 
 ### OpenAPI document
@@ -59,7 +60,7 @@ GET {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}
 X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Accept: application/json
 
-### Update advanced evaluation settings
+### Replace advanced evaluation settings (send every setting that should remain)
 PUT {{FlagbitApi_HostAddress}}/api/flags/{{flagKey}}/evaluation
 X-Api-Key: {{$processEnv ApiKeys__ManagementKey}}
 Content-Type: application/json

@@ -1,6 +1,6 @@
 # Local workflow verification
 
-TODO 7 verification notes, recorded on October 10, 2026, with interactive IDE verification completed on October 11, 2026. These commands and observed results are input for the final documentation pass.
+Verification notes recorded on October 10, 2026, with interactive IDE verification completed on October 11, 2026. The main README, HTTP guide, and SampleApi guide consolidate the supported workflow; this document retains the detailed isolated rehearsal evidence.
 
 ## Verified environment
 
@@ -20,7 +20,7 @@ $verificationRoot = Join-Path $PWD "artifacts/local-verification"
 New-Item -ItemType Directory -Path $verificationRoot -Force | Out-Null
 $envFile = Join-Path $verificationRoot "postgres.env"
 $databasePassword = [Guid]::NewGuid().ToString("N") + ";local"
-@("POSTGRES_DB=flagbit_todo7", "POSTGRES_USER=flagbit", "POSTGRES_PASSWORD=$databasePassword") | Set-Content -LiteralPath $envFile
+@("POSTGRES_DB=flagbit_verification", "POSTGRES_USER=flagbit", "POSTGRES_PASSWORD=$databasePassword") | Set-Content -LiteralPath $envFile
 
 $env:COMPOSE_PROJECT_NAME = "flagbit-verification-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
 $overrideFile = Join-Path $verificationRoot "compose.override.yml"
@@ -170,7 +170,7 @@ No owned API, SampleApi, or `dotnet run` processes should remain. The verificati
 | Pre-existing `feature_flags` table in a separate empty test database | PostgreSQL `42P07`, migration failure, no API start |
 | `Kestrel__Endpoints__Broken__Url=ftp://127.0.0.1:12345` during normal startup | Real API exits before readiness; startup reports its log paths |
 
-All failure checks restored the caller's environment. The conflicting table was created only in `flagbit_todo7_broken` inside the isolated verification container. The main isolated database retained its flag/settings across container recreation. The invalid Kestrel setting was removed after the check.
+All failure checks restored the caller's environment. The conflicting table was created only in `flagbit_verification_broken` inside the isolated verification container. The main isolated database retained its flag/settings across container recreation. The invalid Kestrel setting was removed after the check.
 
 ```powershell
 dotnet test .\tests\Flagbit.Api.Tests -c Release --filter FullyQualifiedName~SampleApiTests
@@ -192,4 +192,4 @@ The Release build completed with zero warnings and zero errors. The final soluti
 
 Compose remains PostgreSQL-only. Existing launch profiles, migrations, database schema, SDK contracts, and evaluation semantics are unchanged. The sample still uses an evaluation key and makes one network evaluation per request. Normal development data was preserved, and the isolated verification container was stopped with its volume retained.
 
-The final documentation TODO should consolidate these commands and observed results. Interactive IDE breakpoint verification is complete. Checks on other operating systems or shells remain unperformed; the supported environment actually exercised is Windows 11 with Windows PowerShell 5.1.
+The reference documentation consolidates these commands and observed results. Interactive IDE breakpoint verification is complete. Checks on other operating systems or shells remain unperformed; the local environment actually exercised is Windows 11 with Windows PowerShell 5.1.
