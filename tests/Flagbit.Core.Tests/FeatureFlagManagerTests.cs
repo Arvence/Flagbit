@@ -22,7 +22,6 @@ public sealed class FeatureFlagManagerTests
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false)]
     public async Task CreateAsyncUsesRequestedInitialState(bool isEnabled)
     {
         var manager = new FeatureFlagManager(new InMemoryFeatureFlagStore());

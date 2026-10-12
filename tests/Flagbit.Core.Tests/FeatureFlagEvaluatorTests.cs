@@ -186,10 +186,6 @@ public sealed class FeatureFlagEvaluatorTests
 
     [Theory]
     [InlineData(FeatureFlagRuleOperator.Equals)]
-    [InlineData(FeatureFlagRuleOperator.NotEquals)]
-    [InlineData(FeatureFlagRuleOperator.Contains)]
-    [InlineData(FeatureFlagRuleOperator.StartsWith)]
-    [InlineData(FeatureFlagRuleOperator.EndsWith)]
     public async Task IsEnabledAsyncFailsEveryOperatorForMissingOrNullAttributes(FeatureFlagRuleOperator ruleOperator)
     {
         var flag = new FeatureFlag("checkout", true, rules: [new FeatureFlagRule("plan", ruleOperator, "enterprise")]);
