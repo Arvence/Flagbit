@@ -1,0 +1,43 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      ConnectionStrings__PostgreSQL: Host=127.0.0.1;Port=5432;Database=flagbit_ci_model;Username=flagbit;Password=flagbit
+      ApiKeys__ManagementKey: ci-management-key
+      ApiKeys__EvaluationKey: ci-evaluation-key
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Restore
+        run: dotnet restore Flagbit.sln
+
+      - name: Build
+        run: dotnet build Flagbit.sln --configuration Release --no-restore
+
+      - name: Restore EF Core tool
+        run: dotnet tool restore
+
+      - name: Verify migration model drift
+        run: dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/Flagbit.Infrastructure --startup-project src/Flagbit.Api --no-build
+
+      - name: Test
+        run: dotnet test Flagbit.sln --configuration Release --no-build --no-restore --verbosity minimal
