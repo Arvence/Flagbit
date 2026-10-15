@@ -37,7 +37,7 @@ jobs:
         run: dotnet tool restore
 
       - name: Verify migration model drift
-        run: dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/Flagbit.Infrastructure --startup-project src/Flagbit.Api --no-build
+        run: dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/Flagbit.Infrastructure --startup-project src/Flagbit.Api --configuration Release --no-build
 
       - name: Test
         run: dotnet test Flagbit.sln --configuration Release --no-build --no-restore --verbosity minimal
