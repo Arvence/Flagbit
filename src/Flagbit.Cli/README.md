@@ -2,10 +2,11 @@
 
 The Flagbit CLI manages and evaluates flags through a running Flagbit HTTP API. It does not require the .NET SDK package in the server application.
 
-Install the tool from your configured NuGet source:
+Build the tool from the Flagbit repository root and install it from the generated local feed:
 
 ```powershell
-dotnet tool install --global Flagbit.Cli
+dotnet pack src/Flagbit.Cli/Flagbit.Cli.csproj -c Release -o artifacts/nuget
+dotnet tool install --global Flagbit.Cli --version 1.0.0 --source ./artifacts/nuget
 ```
 
 Set the API address and an API key before running a command:

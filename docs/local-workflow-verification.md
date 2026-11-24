@@ -180,7 +180,7 @@ dotnet test .\Flagbit.sln -c Release --no-build --no-restore
 
 The 15 sample-boundary tests require no Docker. They cover contextual POST requests, omitted context, enabled/disabled results, unavailable service, revoked/forbidden credentials, invalid responses, timeouts, cancellation, and invalid startup configuration. Full integration tests use disposable PostgreSQL databases.
 
-The Release build completed with zero warnings and zero errors. The final solution test run passed all 494 tests: Core 146, SDK 45, CLI 125, and API 178. The API total includes the 15 new sample tests. Authentication tests now supply their own unused connection string instead of relying on the removed development fallback.
+At the October rehearsal, the Release build completed with zero warnings and zero errors and all 494 tests passed: Core 146, SDK 45, CLI 125, and API 178. A later consolidation reduced the current Core suite to 141 by removing five redundant theory cases. The API total includes the 15 sample tests. Authentication tests supply their own unused connection string instead of relying on the removed development fallback.
 
 ## Change summary and remaining verification limits
 

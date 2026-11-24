@@ -77,7 +77,7 @@ See the [request map](docs/request-map.md) for endpoint access, generated-key lo
 
 ## PostgreSQL
 
-PostgreSQL is used to persist feature flag definitions, enabled states, targeting and rollout settings, environments, evaluation rules, schedules, and dependencies. EF Core and Npgsql provide database access and migration support, while Docker is used for the local PostgreSQL environment during development.
+PostgreSQL is used to persist feature flag definitions, enabled states, targeting and rollout settings, environments, evaluation rules, schedules, and dependencies. EF Core and Npgsql provide database access and migration support. Docker Compose publishes PostgreSQL on `127.0.0.1:5432` for local use.
 
 Apply migrations before starting the updated API. The identifier-normalization migration converts the existing generated lookup columns to application-owned values and backfills them using Core's ordinal case-insensitive identity rules. It retains original identifiers, flag IDs, settings, and generated API keys. Stop older API instances before applying this migration because they rely on database-generated lookup values.
 
@@ -184,7 +184,7 @@ Revocation deletes the stored key. The next request using it returns `401`, incl
 
 ## .NET SDK
 
-Reference `src/Flagbit.Sdk/Flagbit.Sdk.csproj` from a .NET 10 application. The SDK has no dependency on the API, Core, or Infrastructure assemblies. Supply and manage the lifetime of an `HttpClient` with an absolute HTTP(S) base address and an evaluation API key. The SDK preserves its authentication headers and does not dispose it.
+Reference `src/Flagbit.Sdk/Flagbit.Sdk.csproj` from a .NET 10 application, or [build and install the SDK from a local NuGet feed](src/Flagbit.Sdk/README.md). The SDK has no dependency on the API, Core, or Infrastructure assemblies. Supply and manage the lifetime of an `HttpClient` with an absolute HTTP(S) base address and an evaluation API key. The SDK preserves its authentication headers and does not dispose it.
 
 ```csharp
 using Flagbit.Sdk;
@@ -240,7 +240,7 @@ dotnet tool restore
 $env:ConnectionStrings__PostgreSQL = "Host=127.0.0.1;Port=1;Database=flagbit_model_check;Username=flagbit;Password=flagbit"
 $env:ApiKeys__ManagementKey = "local-model-check-management-key"
 $env:ApiKeys__EvaluationKey = "local-model-check-evaluation-key"
-dotnet tool run dotnet-ef migrations has-pending-model-changes --project .\src\Flagbit.Infrastructure --startup-project .\src\Flagbit.Api --no-build
+dotnet tool run dotnet-ef migrations has-pending-model-changes --project .\src\Flagbit.Infrastructure --startup-project .\src\Flagbit.Api --configuration Release --no-build
 
 dotnet test .\Flagbit.sln -c Release --no-build --no-restore
 ```

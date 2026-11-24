@@ -2,10 +2,14 @@
 
 The Flagbit SDK is an optional .NET HTTP client for evaluating flags through a running Flagbit API. The server owns flag definitions and evaluation; the SDK does not persist definitions, cache results, retry failed requests, or provide an outage fallback.
 
-Install the package from your configured NuGet source:
+Build the package from the Flagbit repository root, then install it from that local feed in a .NET 10 consumer. Replace the example feed path with the absolute path to your Flagbit checkout's `artifacts/nuget` directory.
 
 ```powershell
-dotnet add package Flagbit.Sdk
+dotnet pack src/Flagbit.Sdk/Flagbit.Sdk.csproj -c Release -o artifacts/nuget
+```
+
+```powershell
+dotnet add package Flagbit.Sdk --version 1.0.0 --source 'C:/path/to/Flagbit/artifacts/nuget'
 ```
 
 Configure `HttpClient` with the Flagbit API address and an evaluation key, then provide the context needed by the flag:
@@ -22,4 +26,4 @@ var context = new FeatureFlagEvaluationContext(UserId: "user-123", Environment: 
 var enabled = await flags.EvaluateAsync("new-checkout", context);
 ```
 
-Use the cancellation-token overloads when the caller has a request deadline. HTTP errors and malformed responses are surfaced to the caller so the application can choose its own failure policy.
+Use the cancellation-token overloads when the caller has a request deadline. HTTP failures, including `401` after key revocation, surface as `HttpRequestException`. Invalid evaluation JSON surfaces as `JsonException`. A valid `false` result remains distinguishable from these failures.
